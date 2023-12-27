@@ -6,13 +6,18 @@ library(FLCore)
 library(FLBRP)
 
 ## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-  ver_stk <- 0.0002 # virgin spawning biomass
-  a <- 0.0076;b <- 3.069;L_inf <- 85.6;L50 <- 47.1;a50 <- 4.105405;t0 <- -0.1;k_von <- 0.19
-  Amax <- round(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
-  t95 <- 1 # steepness of maturity curve
-  avar <- 5 # the start and finish the maturing before and after a50
-  na <- Amax # age of stock (0 age to na+ group)
-  sd_r <- 0.6 # standard deviation of reproductive process error
+sim <- 10 # number of simulations
+ver_stk <- 0.0002 # initial stock biomass for each age
+a <- 0.0076;b <- 3.069;L_inf <- 85.6;L50 <- 47.1;a50 <- 4.105405;t0 <- -0.1;k_von <- 0.19
+Amax <- round(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
+t95 <- 1 # steepness of maturity curve
+avar <- 5 # the start and finish the maturing before and after a50
+ny_0.5Fmsy <- 75 # year for management to converge in equivalent
+ny_history <- 25 # year for management to converge in equivalent
+ny_msy <- ny_0.5Fmsy+ny_history # years before management
+ny_man <- 100 # management period
+na <- Amax # age of stock (0 age to na+ group)
+sd_r <- 0.6 # standard deviation of reproductive process error
   set.seed(1);epsiron_r <- rnorm(200,0,sd_r)
   sd_i <- 0.2 # standard deviation for biomass index
   maa <- rep(0,na)
