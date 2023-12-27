@@ -1,0 +1,1 @@
+Data-limited資源用の新しいHCRの開発用レポジトリ
