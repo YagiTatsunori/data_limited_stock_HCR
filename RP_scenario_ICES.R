@@ -90,7 +90,7 @@ sd_r <- 0.6 # standard deviation of reproductive process error
   m.spwn(stock_data) <- harvest.spwn(stock_data) <- 0
   mat(stock_data) <- maa
   range(stock_data, c("minfbar", "maxfbar")) <- c(1,16)
-  units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- 'g'
+  units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- '100 tonne'
   units(catch.n(stock_data)) <- units(discards.n(stock_data)) <- units(landings.n(stock_data)) <- units(stock.n(stock_data)) <- '100 million'
   units(catch.wt(stock_data)) <- units(discards.wt(stock_data)) <- units(landings.wt(stock_data)) <- units(stock.wt(stock_data)) <- 'g'
   units(harvest(stock_data)) <- 'f'
