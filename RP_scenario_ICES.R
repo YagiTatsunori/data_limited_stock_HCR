@@ -20,7 +20,7 @@ ny_msy <- ny_0.5Fmsy+ny_history # years before management
 ny_man <- 100 # management period with HCR
 na <- Amax # age of stock (0 age to na+ group)
 sd_r <- 0.6 # standard deviation of reproductive process error
-set.seed(1);epsiron_r <- rnorm(200,0,sd_r)
+set.seed(1); epsiron_r <- rnorm(200,0,sd_r)
 sd_i <- 0.2 # standard deviation for biomass index
 
 # maturity for each age
@@ -54,7 +54,7 @@ data_func <- function(){
   naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,100)
   SBt <- c() # sum of the weight of spawning stock biomass
   naa[,1] <- rep(ver_stk,na)
-  set.seed(1);F <- runif(100,0.5,1.5)*0.1 # fishing mortality in every year
+  set.seed(1); F <- runif(100,0.5,1.5)*0.1 # fishing mortality in every year
   ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
   SBt[1] <- sum(ssb[,1], na.rm = T)
   for(i in 1:100){faa[,i] <- F[i]*saa} # fishing mortality
@@ -86,24 +86,30 @@ data_for_RP <- data_func()
 
 ################################################################################
 # deriving reference points with "FLR"
-slot <- rep("landings.n",na*100);age <- rep(c(1:na),100);year <- sort(rep(c(1:100),16));data <- as.vector(data_for_RP$caa);units <- rep('100 million',na*100) # landing number data from data_for_RP
+slot <- rep("landings.n",na*100); age <- rep(c(1:na),100); year <- sort(rep(c(1:100),16)); data <- as.vector(data_for_RP$caa); units <- rep('100 million',na*100) # landing number data from data_for_RP
 data_landn <- data.frame(slot,age,year,data,units)
 landn <- subset(data_landn, slot=="landings.n", select=-slot)
 landsn <- as.FLQuant(landn)
 stock_data <- as.FLStock(data_landn) # input landings catch number into stock data 
+
 m(stock_data) <- M  # input natural mortality data into stock data
 m.spwn(stock_data) <- harvest.spwn(stock_data) <- 0 # input ratio of natural mortality and harvest before spawn
 mat(stock_data) <- maa # input mature ratio into stock data
 range(stock_data, c("minfbar", "maxfbar")) <- c(1,16) # range to derive the fishing mortality (average of fishing mortality from age1 and age 16+)
+
+# set unit for each index
 units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- '100 tonne'
 units(catch.n(stock_data)) <- units(discards.n(stock_data)) <- units(landings.n(stock_data)) <- units(stock.n(stock_data)) <- '100 million'
 units(catch.wt(stock_data)) <- units(discards.wt(stock_data)) <- units(landings.wt(stock_data)) <- units(stock.wt(stock_data)) <- 'g'
 units(harvest(stock_data)) <- 'f'
-harvest(stock_data) <- as.vector(data_for_RP$faa) # fishing mortality  data from data_for_RP
-catch.n(stock_data) <- landings.n(stock_data)
-stock.n(stock_data) <- as.vector(data_for_RP$naa) # catch number data from data_for_RP
+
+harvest(stock_data) <- as.vector(data_for_RP$faa) # fishing mortality data from data_for_RP
+catch.n(stock_data) <- landings.n(stock_data) # catch number data from data_for_RP
+stock.n(stock_data) <- as.vector(data_for_RP$naa) # stock number data from data_for_RP
 discards.n(stock_data) <- rep(0,100) # discard number data (in this study, set as no discard)
+
 stock.wt(stock_data) <- catch.wt(stock_data) <- landings.wt(stock_data) <- discards.wt(stock_data) <- rep(waa,100) # input indivisual weight data
+
 landings(stock_data) <- computeLandings(stock_data) # derive landing amount every year by multiply individual weight by landing number 
 discards(stock_data) <- computeDiscards(stock_data) # derive discard amount every year by multiply individual weight by discard number
 catch(stock_data) <- computeCatch(stock_data)       # derive catch amount every year by multiply individual weight by catch number
@@ -127,7 +133,7 @@ RP_ICES <- c(plrp@refpts["msy","harvest"],plrp@refpts["msy","yield"],plrp@refpts
 ################################################################################
 # various stock biomass and catch trajectories simulation
 # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
-Fmsy <- plrp@refpts["msy","harvest"];Fcrash <- plrp@refpts["crash","harvest"];MSY <- plrp@refpts["msy","yield"];SBmsy <- plrp@refpts["msy","ssb"]
+Fmsy <- plrp@refpts["msy","harvest"]; Fcrash <- plrp@refpts["crash","harvest"]; MSY <- plrp@refpts["msy","yield"]; SBmsy <- plrp@refpts["msy","ssb"]
 
 trajectory_func <- function(sim,scenario){
   naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,100,sim))
@@ -136,15 +142,15 @@ trajectory_func <- function(sim,scenario){
     naa[,1,k] <- rep(ver_stk,na)
     F_initial <- rep(0.5*Fmsy,75)
     if(scenario == "one-way"){ # derive the fishing mortality trajectry in one-way scenario
-      f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- 76:100
-      rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
-      F_history <- rate ^ (seq(0, length(scen_period)))*f0
+      f0 <- 0.5*Fmsy; fmax <- 0.8*Fcrash;scen_period <- 76:100
+      rate <- exp((log(fmax)-log(f0))/(length(scen_period)))
+      F_history <- rate^(seq(0, length(scen_period)))*f0
       F <- c(F_initial[-75],F_history) %>% matrix(100,sim)
     }else if(scenario == "roller-coaster"){ # derive the fishing mortality trajectry in roller-coaster scenario
-      f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- 76:100;up <- down <- 0.2
+      f0 <- 0.5*Fmsy; fmax <- 0.75*Fcrash; years <- 76:100; up <- down <- 0.2
       F_history <- rep(NA, length(years))
-      rateup <- log(fmax/f0) / log(1 + up)
-      fup <- f0 * ((1 + up) ^ (0:ceiling(rateup)))
+      rateup <- log(fmax/f0)/log(1 + up)
+      fup <- f0*((1+up)^(0:ceiling(rateup)))
       lfup <- length(fup)
       F_history[1:lfup] <- fup
 
@@ -152,9 +158,9 @@ trajectory_func <- function(sim,scenario){
       F_history[lfup:(lfup+5)] <- fup[lfup]
 
       # coming down!
-      ratedo <- c(log(Fmsy/F_history[length(fup)+5]) / log(1 + down))
-      lfdo <- length(F_history) - (lfup +6) + 1
-      fdo <- F_history[lfup + 5] * ((1 + down) ^ seq(0, ceiling(ratedo), length=lfdo))
+      ratedo <- c(log(Fmsy/F_history[length(fup)+5])/log(1+down))
+      lfdo <- length(F_history)-(lfup+6)+1
+      fdo <- F_history[lfup+5]*((1+down)^seq(0, ceiling(ratedo), length=lfdo))
       F_history[(lfup+6):length(F_history)] <- fdo[1:lfdo]
       F <- c(F_initial,F_history) %>% matrix(100,sim)
     }else if(scenario == "random"){ # derive the fishing mortality trajectry in random scenario
@@ -186,9 +192,9 @@ trajectory_func <- function(sim,scenario){
               baa = baa))   # weight of stock biomass
 }
 
-set.seed(1);epsiron_sim <- runif(ny_msy*sim,min = 0,max = 1) %>% matrix(ny_msy,sim) # random error for "random scenario"
-set.seed(1);epsiron_i_sim <- rnorm(ny_msy*sim,0,sd_i) %>% matrix(200,sim) # observation error in biomass index 
-set.seed(1);epsiron_r_sim <- rnorm(ny_msy*sim,0,sd_r) %>% matrix(200,sim) # process error in recruitment
+set.seed(1); epsiron_sim <- runif(ny_msy*sim,min = 0,max = 1) %>% matrix(ny_msy,sim) # random error for "random scenario"
+set.seed(1); epsiron_i_sim <- rnorm(ny_msy*sim,0,sd_i) %>% matrix(200,sim) # observation error in biomass index 
+set.seed(1); epsiron_r_sim <- rnorm(ny_msy*sim,0,sd_r) %>% matrix(200,sim) # process error in recruitment
 
 trajectory <- trajectory_func(sim,"roller-coaster") # select the scenario as fishing histories: one-way, roller-coaster, random
 
