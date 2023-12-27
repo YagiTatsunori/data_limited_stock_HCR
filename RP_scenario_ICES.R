@@ -5,22 +5,12 @@ library(tidyverse)
 library(FLCore)
 library(FLBRP)
 
-# library(FLife)
-# library(FLasher)
-# library(foreach)
-# library(doParallel)
-# library(ggplotFL)
-# library(cowplot)
-# library(Cairo)
-# library(frasyr23)
-# library(ggplot2)
-
-  ## ポラック(Pollachius pollachius; pol-nsea)でやってみる
-  ver_stk <- 0.0002 # 初期資源量
+## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
+  ver_stk <- 0.0002 # virgin spawning biomass
   a <- 0.0076;b <- 3.069;L_inf <- 85.6;L50 <- 47.1;a50 <- 4.105405;t0 <- -0.1;k_von <- 0.19
   Amax <- round(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
   t95 <- 1 # steepness of maturity curve
-  avar <- 5 #成熟の開始と完了がa50の何歳前後か決定
+  avar <- 5 # the start and finish the maturing before and after a50
   na <- Amax # age of stock (0 age to na+ group)
   sd_r <- 0.6 # standard deviation of reproductive process error
   set.seed(1);epsiron_r <- rnorm(200,0,sd_r)
@@ -36,23 +26,25 @@ library(FLBRP)
   M <- exp(0.55-1.61*log(laa)+1.44*log(L_inf)+log(k_von)) # natural mortality for each age
   alpha <- 1.17596948093898;beta <- 90.9090909090909 # parameters in recruitment function
 
+  # selectivity of fishing mortality at each age
   saa <- rep(0,na);t1 <- a50+t95;sl <- 2;sr <- 5000
   for (s in 1:na){
     if (s < t1){saa[s] <- 2^-((s-t1)/sl)^2}
     else       {saa[s] <- 2^-((s-t1)/sr)^2}
-  } # selectivity at age
+  }
 
   S2max <- 1 # max selectivity for biomass index
   steepness <- 1 # steepness of selectivity curve for biomass index
   S2a50 <- 0.1*a50 # inflection point of selectivity curve for biomass index
-  S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index
+  S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
 
-  # 100年間適当に漁獲圧を変化させた時のデータを集める
+################################################################################
+# data for 100 years with varying fishing mortality every year
   data_func <- function(){
     naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,100)
     SBt <- c() # sum of the weight of spawning stock biomass
     naa[,1] <- rep(ver_stk,na)
-    set.seed(1);F <- runif(100,0.5,1.5)*Fmsy # fishing mortality in every year
+    set.seed(1);F <- runif(100,0.5,1.5)*0.1 # fishing mortality in every year
     ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
     SBt[1] <- sum(ssb[,1], na.rm = T)
     for(i in 1:100){faa[,i] <- F[i]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
@@ -82,8 +74,9 @@ library(FLBRP)
   # derive the simulation data
   data_for_RP <- data_func()
 
-  ############# reference pointsを求める
-  slot <- rep("landings.n",na*100);age <- rep(c(1:na),100);year <- sort(rep(c(1:100),16));data <- as.vector(data_for_RP$caa);units <- rep(1,na*100)
+################################################################################
+############# deriving reference points with "FLR"
+  slot <- rep("landings.n",na*100);age <- rep(c(1:na),100);year <- sort(rep(c(1:100),16));data <- as.vector(data_for_RP$caa);units <- rep('100 million',na*100)
   data_landn <- data.frame(slot,age,year,data,units)
   landn <- subset(data_landn, slot=="landings.n", select=-slot)
   landsn <- as.FLQuant(landn)
@@ -93,7 +86,7 @@ library(FLBRP)
   mat(stock_data) <- maa
   range(stock_data, c("minfbar", "maxfbar")) <- c(1,16)
   units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- 'g'
-  units(catch.n(stock_data)) <- units(discards.n(stock_data)) <- units(landings.n(stock_data)) <- units(stock.n(stock_data)) <- '1'
+  units(catch.n(stock_data)) <- units(discards.n(stock_data)) <- units(landings.n(stock_data)) <- units(stock.n(stock_data)) <- '100 million'
   units(catch.wt(stock_data)) <- units(discards.wt(stock_data)) <- units(landings.wt(stock_data)) <- units(stock.wt(stock_data)) <- 'g'
   units(harvest(stock_data)) <- 'f'
   harvest(stock_data) <- as.vector(data_for_RP$faa)
@@ -116,17 +109,16 @@ library(FLBRP)
 
 RP_ICES <- c(plrp@refpts["msy","harvest"],plrp@refpts["msy","yield"],plrp@refpts["msy","ssb"],plrp@refpts["virgin","ssb"])
 
-RP <- data.frame(indicators=c("Fmsy","MSY","SBmsy","SB0"), Japan=RP_Japan,ICES=RP_ICES) %>% as_tibble()
-
 ################################################################################
-  # Linking the performance of a data-limited empirical catch rule to life-history traitsでのreference points
-  # Fmsy = 0.115575439, msy = 48.28520756, SBmsy = 284.1314646
-
-Fmsy <- RP$ICES[1];Fcrash <- plrp@refpts["crash","harvest"]
+# RP_ICES is the values of reference points from my simulation with "FLR"
+# but according to https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv, the RPs are as follows:
+# Fmsy = 0.115575439, msy = 48.28520756, SBmsy = 284.1314646
 
 ################################################################################
 # various stock biomass and catch trajectories simulation
 # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
+Fmsy <- plrp@refpts["msy","harvest"];Fcrash <- plrp@refpts["crash","harvest"];MSY <- plrp@refpts["msy","yield"];SBmsy <- plrp@refpts["msy","ssb"]
+
 trajectory_func <- function(sim,scenario){
   naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,100,sim))
   SBt <- matrix(0,100,sim)
@@ -188,9 +180,10 @@ set.seed(1);epsiron_sim <- runif(ny_msy*sim,min = 0,max = 1) %>% matrix(ny_msy,s
 set.seed(1);epsiron_i_sim <- rnorm(ny_msy*sim,0,sd_i) %>% matrix(200,sim)
 set.seed(1);epsiron_r_sim <- rnorm(ny_msy*sim,0,sd_r) %>% matrix(200,sim)
 
-trajectory <- trajectory_func(sim,"roller-coaster") # シナリオを選択：one-way, roller-coaster, random
+trajectory <- trajectory_func(sim,"roller-coaster") # select the scenario as fishing histories: one-way, roller-coaster, random
 
-##################################管理シナリオ##################################
+################################################################################
+# management term with rfb-rule in 100 years
   library(remotes)
   library(cat3advice)
   Linf <- L_inf*rlnorm(200*sim,0,0.1) %>% matrix(200,sim) # L_inf is the mean length, Linf is the varied L_inf in every year
@@ -224,7 +217,7 @@ trajectory <- trajectory_func(sim,"roller-coaster") # シナリオを選択：on
         }
         pooled_frequency_data <- rbind(pooled_frequency_data,frequency_length)
       }
-      lc <- Lc(pooled_frequency_data, pool = 96:100) # Lcは96~100年のもの全体をプールして計算
+      lc <- Lc(pooled_frequency_data, pool = 96:100) # Lc is derived from the data in 96-100 years
       L_mean <- Lmean(data = pooled_frequency_data, Lc = lc)
       LF_M <- 0.75*lc@value+0.25*Linf
       f <- L_mean@value/LF_M # Fmsy proxy
@@ -238,29 +231,29 @@ trajectory <- trajectory_func(sim,"roller-coaster") # シナリオを選択：on
         }
         naa[na,t,k] <- naa[na-1,t-1,k]*exp(-faa[na-1,t-1,k]-M[na-1]) + naa[na,t-1,k]*exp(-faa[na,t-1,k]-M[na])
 
-        r <- mean(iaa_obs[(t-3):(t-2),k])/mean(iaa_obs[(t-6):(t-4),k]) # 資源量指標値の変化率
-        Itrigger <- 1.4*min(iaa_obs[76:ny_msy,k]) # Itriggerは、過去最低資源量指数を1.4倍したもの
-        b <- min(1,iaa_obs[t-2,k]/Itrigger) # 指標地が閾値より落ちた時の安全弁
-        ### kの値に応じてmanagement toolを変更
+        r <- mean(iaa_obs[(t-3):(t-2),k])/mean(iaa_obs[(t-6):(t-4),k]) # biomass ratio (survey trend)
+        Itrigger <- 1.4*min(iaa_obs[76:ny_msy,k]) # 1.4*Iloss (Iloss is the minimum biomass index)
+        b <- min(1,iaa_obs[t-2,k]/Itrigger) # biomass safeguard when the latest biomass index is less than Itrigger
+        ### according to the value of k, select the management tool
         if(k_von < 0.2){
           m <- 0.95
           Catch[t,k] <- Catch[t-2,k]*r*f[t-2,k]*b*m
         }else if(0.2 <= k_von & k_von < 0.32){
           m <- 0.9
           Catch[t,k] <- Catch[t-2,k]*r*f[t-2,k]*b*m
-        }else if(0.32 <= k_von & k_von <= 0.45){ # これだけfが過去のデータすべて使うから注意
+        }else if(0.32 <= k_von & k_von <= 0.45){ # only this case, need the all past "f" value
           f_proxy <- sum(wcaa[,which(f[1:(t-2),k] > 1)])/sum(iaa_obs[which(f[1:(t-2),k] > 1)])/length(which(f[1:(t-2),k] > 1))
           m <- 0.5
           Catch[t,k] <- Catch[t-2,k]*r*f_proxy*b*m
         }
         if (b < 1){
           Catch[t,k] <- Catch[t,k]
-        } else {
-          # ただし、漁獲量は前年の0.7倍以上かつ1.2倍以下
+            } else {
+          # note that the amount is more than 0.7 and less than 1.2 as the last catch amount when b < 1
           Catch[t,k] <- min(1.2*Catch[t-2,k],max(Catch[t,k],0.7*Catch[t-2,k]))
-        }
+            }
 
-        ### Catch[t]を与えてくれるようなF[t]を求める関数
+        ### calculate the F[t] for each age
         F_cal <- function(F_beta){
           Catch_plan <- sum(naa[,t,k]*(1-exp(-F_beta*Fmsy*saa))*exp(-M/2)*waa)
           return(abs(Catch_plan-Catch[t,k]))
@@ -279,8 +272,8 @@ trajectory <- trajectory_func(sim,"roller-coaster") # シナリオを選択：on
         }
         pooled_frequency_data <- rbind(pooled_frequency_data,frequency_length)
         L_mean <- Lmean(data = pooled_frequency_data, Lc = lc)
-        LF_M <- 0.75*lc@value+0.25*Linf # Lcは前年のものだよね？今年の漁獲物の体長が分かるわけないし
-        f <- L_mean@value/LF_M # Fmsy proxy
+        LF_M <- 0.75*lc@value+0.25*Linf
+        f[t,] <- L_mean@value[t]/LF_M[t,] # Fmsy proxy
         ssb[,t,k] <- naa[,t,k]*maa*waa
         SBt[t,k] <- sum(ssb[,t,k], na.rm = T)
         iaa[t,k] <- sum(S2*naa[,t,k]*waa)
@@ -298,3 +291,116 @@ trajectory <- trajectory_func(sim,"roller-coaster") # シナリオを選択：on
          method = "ICES")
   }
   result_ICES <- ICES_func()
+
+################################################################################
+# plot the simulation results
+  simulation_result_WCAA <- rbind(
+    result_ICES$wcaa %>% apply(2:3,sum) %>%
+      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
+      t %>% as_tibble() %>%
+      set_names(c("val_10", "val_50", "val_90")) %>%
+      mutate(mean = result_ICES$wcaa %>% apply(2:3,sum) %>% apply(1, mean),
+             method = "ICES", year = 1:(ny_msy+ny_man),
+             No1 = result_ICES$wcaa[,,1] %>% apply(2,sum),
+             No2 = result_ICES$wcaa[,,round(sim/2)] %>% apply(2,sum),
+             No3 = result_ICES$wcaa[,,sim] %>% apply(2,sum))
+  )
+
+  simulation_result_BAA <- rbind(
+    result_ICES$baa %>% apply(2:3,sum) %>%
+      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
+      t %>% as_tibble() %>%
+      set_names(c("val_10", "val_50", "val_90")) %>%
+      mutate(mean = result_ICES$baa %>% apply(2:3,sum) %>% apply(1, mean),
+             method = "ICES", year = 1:(ny_msy+ny_man),
+             No1 = result_ICES$baa[,,1] %>% apply(2,sum),
+             No2 = result_ICES$baa[,,round(sim/2)] %>% apply(2,sum),
+             No3 = result_ICES$baa[,,sim] %>% apply(2,sum))
+  )
+
+  simulation_result_SSB <- rbind(
+    result_ICES$ssb %>% apply(2:3,sum) %>%
+      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
+      t %>% as_tibble() %>%
+      set_names(c("val_10", "val_50", "val_90")) %>%
+      mutate(mean = result_ICES$ssb %>% apply(2:3,sum) %>% apply(1, mean),
+             method = "ICES", year = 1:(ny_msy+ny_man),
+             No1 = result_ICES$ssb[,,1] %>% apply(2,sum),
+             No2 = result_ICES$ssb[,,round(sim/2)] %>% apply(2,sum),
+             No3 = result_ICES$ssb[,,sim] %>% apply(2,sum))
+  )
+
+  simulation_result_FAA <- rbind(
+    (result_ICES$faa/saa) %>% apply(2:3,mean) %>%
+      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
+      t %>% as_tibble() %>%
+      set_names(c("val_10", "val_50", "val_90")) %>%
+      mutate(mean = (result_ICES$faa/saa) %>% apply(2,mean),
+             method = "ICES", year = 1:(ny_msy+ny_man),
+             No1 = (result_ICES$faa[,,1]/saa) %>% apply(2,mean),
+             No2 = (result_ICES$faa[,,round(sim/2)]/saa) %>% apply(2,mean),
+             No3 = (result_ICES$faa[,,sim]/saa) %>% apply(2,mean))
+  )
+
+  simulation_result_IAA_OBS <- rbind(
+    result_ICES$iaa_obs %>%
+      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
+      t %>% as_tibble() %>%
+      set_names(c("val_10", "val_50", "val_90")) %>%
+      mutate(mean = result_ICES$iaa_obs %>% apply(1, mean),
+             method = "ICES", year = 1:(ny_msy+ny_man),
+             No1 = result_ICES$iaa_obs[,1],
+             No2 = result_ICES$iaa_obs[,round(sim/2)],
+             No3 = result_ICES$iaa_obs[,sim])
+)
+
+ggplot(simulation_result_WCAA[simulation_result_WCAA$year >= 50,],aes(year,colour = method)) +
+    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
+    geom_line(aes(y = val_10), size = 0.5) +
+    geom_line(aes(y = mean), size = 1) +
+    geom_line(aes(y = val_90), size = 0.5) +
+
+    # the trajectory of three replicates
+    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = MSY@.Data), size = 2, alpha = 0.6, col = "black") +
+    labs(x = "year", y = "catch")
+
+ggplot(simulation_result_SSB[simulation_result_SSB$year >= 50,],aes(year,colour = method)) +
+    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
+    geom_line(aes(y = val_10), size = 0.5) +
+    geom_line(aes(y = mean), size = 1) +
+    geom_line(aes(y = val_90), size = 0.5) +
+
+    # the trajectory of three replicates
+    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = SBmsy@.Data), size = 2, alpha = 0.6, col = "black") +
+    labs(x = "year", y = "spawning stock biomass")
+
+ggplot(simulation_result_FAA[simulation_result_FAA$year >= 50,],aes(year,colour = method)) +
+    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
+    geom_line(aes(y = val_10), size = 0.5) +
+    geom_line(aes(y = mean), size = 1) +
+    geom_line(aes(y = val_90), size = 0.5) +
+
+    # the trajectory of three replicates
+    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = Fmsy@.Data), size = 2, alpha = 0.6, col = "black") +
+    labs(x = "year", y = "fishing mortality")
+
+ggplot(simulation_result_IAA_OBS[simulation_result_IAA_OBS$year >= 50,],aes(year,colour = method)) +
+    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
+    geom_line(aes(y = val_10), size = 0.5) +
+    geom_line(aes(y = mean), size = 1) +
+    geom_line(aes(y = val_90), size = 0.5) +
+
+    # the trajectory of three replicates
+    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
+    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
+    labs(x = "year", y = "biomass index")
