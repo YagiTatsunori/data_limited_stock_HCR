@@ -19,7 +19,8 @@ ny_history <- 25 # histrical fishing period with 3 scenario (one-way, roller-coa
 ny_msy <- ny_0.5Fmsy+ny_history # years before management
 ny_man <- 100 # management period with HCR
 na <- Amax # age of stock (0 age to na+ group)
-sd_r <- 0.6 # standard deviation of reproductive process error
+#sd_r <- 0.6 # standard deviation of reproductive process error
+sd_r <- 0 # standard deviation of reproductive process error
 set.seed(1); epsiron_r <- rnorm(200,0,sd_r)
 sd_i <- 0.2 # standard deviation for biomass index
 
@@ -48,13 +49,35 @@ steepness <- 1 # steepness of selectivity curve for biomass index
 S2a50 <- 0.1*a50 # inflection point of selectivity curve for biomass index
 S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
 
+## 生物パラメータが決まった時点で、一般的な管理基準値とかR0とかｈを計算しておく
+library(frasyr)
+# 管理基準値計算（生物パラメータはデータフレームにしないと動かないのでtmpfuncという関数を作ってそれで変換している）
+tmpfunc <- function(x) as.data.frame(t(x))
+res_RP_fraysr <- frasyr::ref.F(res=NULL,Fcurrent=tmpfunc(saa),M=tmpfunc(M),waa=tmpfunc(waa),
+                       maa=tmpfunc(maa), waa.catch=tmpfunc(waa), Pope=TRUE)
+#            FpSPR.30.SPR           Fmax
+#max          0.2268583 0.5364592
+#Fref/Fcur    0.2268583 0.5364592
+
+# hやR0はどのくらいなのか？ 日本とICESでBHのパラメータ設定がちょっと違うで変換してから計算する
+SRpars <- list(a=alpha/beta, b=1/beta, sd=sd_r)
+# SB0、B0、R0は一致
+SRpars$steepness <- frasyr::calc_steepness(M=M, Pope=TRUE, SR="BH",waa=waa,maa=maa,rec_pars=SRpars)
+#             SPR0           SB0                 R0              B0         h
+# 1 357.2928 329.2564 0.9215309 455.9188 0.5360608
+
+# 加入が１のときの平衡状態における年齢組成(初期値にしたりする）。ただ、このばあいはあんまり関係なかった（むしろすごく小さい値とかからはじめて、再生産関係が推定できるようなデータをつくらないとうまく計算できないと思う）
+rel_abund <-  frasyr::calc.rel.abund(sel=saa,Fr=0,na=length(M),M=M,waa=waa,maa=maa)
+
+
 ################################################################################
 # data for 100 years with varying fishing mortality every year
 data_func <- function(){
   naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,100)
   SBt <- c() # sum of the weight of spawning stock biomass
   naa[,1] <- rep(ver_stk,na)
-  set.seed(1); F <- runif(100,0.5,1.5)*0.1 # fishing mortality in every year
+  #  set.seed(1); F <- runif(100,0.5,1.5)*0.1 # fishing mortality in every year
+  set.seed(1); F <- runif(100,1,1)*0.1 # fishing mortality in every year  
   ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
   SBt[1] <- sum(ssb[,1], na.rm = T)
   for(i in 1:100){faa[,i] <- F[i]*saa} # fishing mortality
@@ -95,7 +118,7 @@ stock_data <- as.FLStock(data_landn) # input landings catch number into stock da
 m(stock_data) <- M  # input natural mortality data into stock data
 m.spwn(stock_data) <- harvest.spwn(stock_data) <- 0 # input ratio of natural mortality and harvest before spawn
 mat(stock_data) <- maa # input mature ratio into stock data
-range(stock_data, c("minfbar", "maxfbar")) <- c(1,16) # range to derive the fishing mortality (average of fishing mortality from age1 and age 16+)
+range(stock_data, c("minfbar", "maxfbar")) <- c(16,16) # range to derive the fishing mortality (average of fishing mortality from age1 and age 16+)　（管理基準値を計算するときに、どの年齢（と、どの年？）のFの平均を代表として使うか？を指定するための設定だと思う。この場合は選択率一定＆最高齢でFが最も高いため、その年齢をリファーするようにしてみる）
 
 # set unit for each index
 units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- '100 tonne'
@@ -117,13 +140,38 @@ stock(stock_data) <- computeStock(stock_data)       # derive stock amount every 
 
 plsr <- as.FLSR(stock_data)
 model(plsr) <- bevholt() # ricker() or bevholt(): if you need, type "help(ricker)"
-plsr <- fmle(plsr)
+plsr <- fmle(plsr) #  here, parameter estimation is conducted
+# params(plsr)$a/alpha
+# params(plsr)$b/beta
 plot(plsr) # plot stock-recruitment curve
 plrp <- FLBRP(stock_data,sr=plsr)
 plrp@refpts # table of reference points
 plot(plrp, obs=T) # plot reference points and observation data
 
 RP_ICES <- c(plrp@refpts["msy","harvest"],plrp@refpts["msy","yield"],plrp@refpts["msy","ssb"],plrp@refpts["virgin","ssb"])
+
+# さっきfrasyrで計算した値と比較
+
+# F30%SPR 
+res_RP_fraysr$summary$FpSPR.30.SPR
+# 0.2268583
+plrp@refpts["spr.30","harvest"]
+# spr.30 0.227
+
+#F0.1
+res_RP_fraysr$summary$F0.1
+#  0.186651 
+plrp@refpts["f0.1","harvest"]
+#   f0.1 0.19
+
+# virgin biomass etc. 
+SRpars$steepness
+#             SPR0           SB0        R0                    B0         h
+# 1 357.2928 329.2564 0.9215309 455.9188 0.5360608
+plrp@refpts["virgin",]
+# refpt    harvest yield   rec     ssb     biomass revenue cost    profit 
+#   virgin   0.000   0.000   0.922 329.256 455.919      NA      NA      NA
+
 
 ################################################################################
 # RP_ICES is the values of reference points from my simulation with "FLR"
