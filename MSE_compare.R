@@ -22,9 +22,9 @@ Amax <- round(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
 t95 <- 1 # steepness of maturity curve
 avar <- 5 # the start and finish the maturing before and after a50
 na <- Amax # age of stock (0 age to na+ group)
-sd_r <- 0 # standard deviation of reproductive process error
-sd_i <- 0 # standard deviation for biomass index
-sd_l <- 0 # standard deviation for Linf
+sd_r <- 0.6 # standard deviation of reproductive process error
+sd_i <- 0.2 # standard deviation for biomass index
+sd_l <- 0.1 # standard deviation for Linf
 maa <- rep(0,na)
 for (s in 1:na){
   if      (s < a50 - avar){maa[s] <- 0}
@@ -271,8 +271,8 @@ ggplot(simulation_result_U[simulation_result_U$year >= 1,],aes(year,colour = met
 # パフォーマンス指標の計算
 ny_scenario <- trajectory$ny_before;ny_HCR <- max(management_rfb$year)
 
-RB <- (management_rfb$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2,sum) %>% mean())/Bmsy
-RC <- (management_rfb$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2,sum) %>% mean())/MSY
+RB <- (management_rfb$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% mean())/Bmsy
+RC <- (management_rfb$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% mean())/MSY
 AAV <- abs((apply(management_rfb$wcaa[,ny_scenario:ny_HCR,],2,sum)-apply(management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/
                       ((apply(management_rfb$wcaa[,ny_scenario:ny_HCR,],2,sum)+apply(management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/2)) %>% mean()
 
@@ -288,8 +288,8 @@ per_ICES <- c(RB, RC, AAV, SSB_per_SBmsy, catch_per_MSY, F_per_Fmsy, collapse_ri
 #
 ny_scenario <- trajectory$ny_before;ny_HCR <- max(management_type2$year)
 
-RB <- (management_type2$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2,sum) %>% mean())/Bmsy
-RC <- (management_type2$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2,sum) %>% mean())/MSY
+RB <- (management_type2$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% mean())/Bmsy
+RC <- (management_type2$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% mean())/MSY
 AAV <- abs((apply(management_type2$wcaa[,ny_scenario:ny_HCR,],2,sum)-apply(management_type2$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/
              ((apply(management_type2$wcaa[,ny_scenario:ny_HCR,],2,sum)+apply(management_type2$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/2)) %>% mean()
 
