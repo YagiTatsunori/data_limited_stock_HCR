@@ -2,6 +2,7 @@ Data-limited資源用の新しいHCRの開発用レポジトリ
 
 ## MSE_compare.R
 reference_points.R, scenario_before_management.R, management_HCR.Rもダウンロード  
+  
 scenario_before_management_func("ICES" or "Japan",  
                                 "one-way" or "roller-coaster" or "random",  
                                 0.75 or 0.5 or 0.25,  
