@@ -8,7 +8,17 @@ library(remotes)
 library(cat3advice)
 
 # calculation for stock parameters from given parameters
-stock_parametars <- function(t95 = 1, # steepness of maturity curve
+stock_parameters <- function(a, # allometry parameter
+                             b, # allometry parameter
+                             L_inf, # von Bertalanffy growth parameter
+                             L50, # length at 50% maturity
+                             a50, # age at 50% maturity
+                             t0, # von Bertalanffy growth parameter
+                             k_von, # von Bertalanffy growth parameter
+                             waa, # catch weight at age
+                             alpha, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
+                             beta, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
+                             t95 = 1, # steepness of maturity curve
                              avar = 5, # the start and finish the maturing before and after a50
                              sl = 2, # selectivity parameter
                              sr = 5000, # selectivity parameter
@@ -16,7 +26,7 @@ stock_parametars <- function(t95 = 1, # steepness of maturity curve
                              steepness = 1 # steepness of selectivity curve for biomass index
 ){
   laa <- (waa/a)^(1/b) # average length for each age
-  Amax <- round(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
+  Amax <- ceiling(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
   na <- Amax # age of stock (0 age to na+ group)
   maa <- rep(0,na)
   for (s in 1:na){
@@ -35,36 +45,22 @@ stock_parametars <- function(t95 = 1, # steepness of maturity curve
   S2a50 <- 0.1*a50 # inflection point of selectivity curve for biomass index
   S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
   ver_stk <- rep(10/sum(waa),na) # initial stock biomass for each age
-  return(list(a = a,
-              b = b,
-              L_inf = L_inf,
-              L50 = L50,
-              a50 = a50,
-              t0 = t0,
-              k_von = k_von,
-              waa = waa,
-              laa = laa,
-              alpha = alpha,
-              beta = beta,
-              na = na,
-              maa = maa,
-              M = M,
-              saa = saa,
-              S2 = S2,
-              ver_stk = ver_stk))
+
+  argname <- ls() # 引数をとっておいて再現できるようにする
+  arglist <- lapply(argname,function(xx) eval(parse(text=xx)))
+  names(arglist) <- argname
+  output <- list(a = a, b = b, L_inf = L_inf, L50 = L50, a50 = a50, t0 = t0,
+                 k_von = k_von, waa = waa, laa = laa, alpha = alpha, beta = beta,
+                 na = na, maa = maa, M = M, saa = saa, S2 = S2, ver_stk = ver_stk,
+                 arglist = arglist)
+return(output)
 }
 
 # calculation for reference points
-reference_points_func <- function(na,
-                                  ver_stk,
-                                  maa,
-                                  waa,
-                                  saa,
-                                  M,
-                                  alpha,
-                                  beta
+reference_points <- function(parameters # calculation based on the calculated stock parameters
 ){
-  data_func <- function(){
+    na <- parameters$arglist$na;ver_stk <- parameters$arglist$ver_stk;maa <- parameters$arglist$maa;waa <- parameters$arglist$waa;saa <- parameters$arglist$saa;M <- parameters$arglist$M;alpha <- parameters$arglist$alpha;beta <- parameters$arglist$beta;S2 <- parameters$arglist$S2;laa <- parameters$arglist$laa;L_inf <- parameters$arglist$L_inf
+
     naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,100)
     SBt <- c() # sum of the weight of spawning stock biomass
     naa[,1] <- ver_stk
@@ -87,16 +83,12 @@ reference_points_func <- function(na,
       caa[,t] <- naa[,t]*(1-exp(-faa[,t]))*exp(-M/2)
     }
     wcaa = caa*waa; baa = naa*waa
-    return(tibble(naa = naa,   # number of stock
-                  wcaa = wcaa, # weight of catch
-                  ssb = ssb,   # spawning stock biomass
-                  caa = caa,   # number of catch
-                  faa = faa,   # fishing mortality
-                  baa = baa))  # weight of stock biomass
-  }
-
-  # derive the simulation data
-  data_for_RP <- data_func()
+    data_for_RP <- tibble(naa = naa,   # number of stock
+                          wcaa = wcaa, # weight of catch
+                          ssb = ssb,   # spawning stock biomass
+                          caa = caa,   # number of catch
+                          faa = faa,   # fishing mortality
+                          baa = baa)  # weight of stock biomass
 
   ################################################################################
   ############# deriving reference points with "FLR"
@@ -132,16 +124,27 @@ reference_points_func <- function(na,
   # plot(plrp, obs=T)
 
   Fmsy <- plrp@refpts["msy","harvest"];Fcrash <- plrp@refpts["crash","harvest"];MSY <- plrp@refpts["msy","yield"];SBmsy <- plrp@refpts["msy","ssb"];Bmsy <- plrp@refpts["msy","biomass"];SB0 <- plrp@refpts["virgin","ssb"];B0 <- plrp@refpts["virgin","biomass"]
-  return(tibble(Fmsy,Fcrash,MSY,SBmsy,Bmsy,SB0,B0))
+  argname <- ls() # 引数をとっておいて再現できるようにする
+  arglist <- lapply(argname,function(xx) eval(parse(text=xx)))
+  names(arglist) <- argname
+  output <- list(Fmsy = Fmsy@.Data[1],Fcrash = Fcrash@.Data[1],MSY =MSY@.Data[1],SBmsy = SBmsy@.Data[1],
+              Bmsy = Bmsy@.Data[1],SB0 = SB0@.Data[1],B0 = B0@.Data[1],arglist = arglist)
 }
 
-# 管理前のシナリオを設定
-scenario_and_management_func <- function(scenario_organization, # "ICES" or "Japan"
-                                         scenario, # "one-way" or "roller-coaster" or "random"
-                                         start, # 0.75 or 0.5 or 0.25
-                                         end,  # 0.75 or 0.5 or 0.25
-                                         rule  # "rfb-rule" or "type2-rule"
+# 管理前のシナリオと管理期間中のHCRを設定
+scenario_and_management <- function(scenario_organization, # "ICES" or "Japan"
+                                    scenario, # "one-way" or "roller-coaster" or "random"
+                                    start, # 0.75 or 0.5 or 0.25
+                                    end, # 0.75 or 0.5 or 0.25
+                                    rule, # "rfb-rule" or "type2-rule"
+                                    sd_r, # standard deviation of recruitment error
+                                    sd_i, # standard deviation of observation error
+                                    sd_l, # standard deviation of Linf
+                                    sim # number of simulation
 ){
+  na <- parameters$arglist$na;ver_stk <- parameters$arglist$ver_stk;maa <- parameters$arglist$maa;waa <- parameters$arglist$waa;saa <- parameters$arglist$saa;M <- parameters$arglist$M;alpha <- parameters$arglist$alpha;beta <- parameters$arglist$beta;S2 <- parameters$arglist$S2;laa <- parameters$arglist$laa;L_inf <- parameters$arglist$L_inf
+  k_von <- parameters$k_von
+  Fmsy <- RP$Fmsy@.Data[1];Fcrash <- RP$Fcrash@.Data[1];MSY <- RP$MSY@.Data[1];SBmsy <- RP$SBmsy@.Data[1];Bmsy <- RP$Bmsy@.Data[1];SB0 <- RP$SB0@.Data[1];B0 <- RP$B0@.Data[1]
 
   # 年数と初期資源量はシナリオによって違うので注意
   # various stock biomass and catch trajectories simulation
@@ -151,8 +154,8 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
     ny_0.5Fmsy <- 75 # year for management to converge in equivalent
     ny_history <- 25 # year for management to converge in equivalent
     ny_before <- ny_0.5Fmsy+ny_history # years before management
-    }
-    if(scenario_organization == "Japan"){ny_before <- 20}
+  }
+  if(scenario_organization == "Japan"){ny_before <- 20}
 
   if(rule == "rfb-rule"){ny_after <- 100}
   if(rule == "type2-rule"){ny_after <- 30}
@@ -216,51 +219,31 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
   # ここから2系ルールのシナリオ
   if(scenario_organization == "Japan"){
     # calculate the fishing mortality before management
-    naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,(ny_before+1))
+    naa <- ssb <- matrix(0,na,(ny_before+1))
     SBt <- c() # sum of the weight of spawning stock biomass
 
     # biomass in plan
-    Biomass <- rep(NA, (ny_before+1))
-    Biomass <- seq(B0*start, B0*end, length = (ny_before+1))
-    naa[,1] <- Biomass[1]/(sum(waa))
+    naa[,1] <- B0*start/(sum(waa))
     ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
     SBt[1] <- sum(ssb[,1], na.rm = T)
-    colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:(ny_before+1)
+    colnames(naa) <- colnames(ssb) <- 1:(ny_before+1)
 
     # calculate fishing mortality and catch in t=1
     F_cal <- function(F){
-      a_1 <- (alpha*SBt[1]/(beta+SBt[1]))
-      a_2_15 <- naa[1:14,1]*exp(-F*saa[1:14]-M[1:14])
-      a_na <- naa[na-1,1]*exp(-F*saa[15]-M[na-1]) + naa[na,1]*exp(-F*saa[16]-M[na])
-      next_biomass <- sum(c(a_1,a_2_15,a_na)*waa)
-      return(abs(Biomass[2]-next_biomass))
-    }
-    faa[,1] <- optimize(F_cal, interval = c(0, 10))$minimum*saa
-    caa[,1] <- naa[,1]*(1-exp(-faa[,1]))*exp(-M/2)
-
-    for (t in 2:(ny_before+1)) {
-      naa[1,t] <- (alpha*SBt[t-1]/(beta+SBt[t-1])) # Beverton-Holt type reproductive function
-      naa[2,t] <- naa[1,t-1]*exp(-faa[1,t-1]-M[1])
-      for(s in 3:(na-1)){
-        naa[s,t] <- naa[s-1,t-1]*exp(-faa[s-1,t-1]-M[s-1])
+      for (t in 2:(ny_before+1)) {
+        naa[1,t] <- (alpha*SBt[t-1]/(beta+SBt[t-1])) # Beverton-Holt type reproductive function
+        naa[2,t] <- naa[1,t-1]*exp(-F*saa[1]-M[1])
+        for(s in 3:(na-1)){
+          naa[s,t] <- naa[s-1,t-1]*exp(-F*saa[s-1]-M[s-1])
+        }
+        naa[na,t] <- naa[na-1,t-1]*exp(-F*saa[na-1]-M[na-1]) + naa[na,t-1]*exp(-F*saa[na]-M[na])
+        SBt[t] <- sum(naa[,t]*maa*waa, na.rm = T)
       }
-      naa[na,t] <- naa[na-1,t-1]*exp(-faa[na-1,t-1]-M[na-1]) + naa[na,t-1]*exp(-faa[na,t-1]-M[na])
-      ssb[,t] <- naa[,t]*maa*waa
-      SBt[t] <- sum(ssb[,t], na.rm = T)
-
-      F_cal <- function(F){
-        a_1 <- (alpha*SBt[t]/(beta+SBt[t]))
-        a_2_15 <- naa[1:14,t]*exp(-F*saa[1:14]-M[1:14])
-        a_na <- naa[na-1,t]*exp(-F*saa[15]-M[na-1]) + naa[na,t]*exp(-F*saa[16]-M[na])
-        next_biomass <- sum(c(a_1,a_2_15,a_na)*waa)
-        return(abs(Biomass[t+1]-next_biomass))
-      }
-      faa[,t] <- optimize(F_cal, interval = c(0, 10))$minimum*saa
-      caa[,t] <- naa[,t]*(1-exp(-faa[,t]))*exp(-M/2)
+      end_biomass <- sum(naa[,(ny_before+1)]*waa)
+      return(abs(B0*end-end_biomass))
     }
-
     # 管理前シナリオで実行するFを計算
-    F_before_management <- faa[,1:ny_before]
+    F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
 
 
     # various stock biomass and catch trajectories simulation
@@ -291,21 +274,22 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
   }
 
   # HCRによる管理期間
+  if(ny_before == 100){
+    ny_reference <- 24
+  }
+  if(ny_before == 20){
+    ny_reference <- 19
+  }
+
   # ここからICES
   if(rule == "rfb-rule"){
-    if(ny_before == 100){
-      ny_reference <- 24
-    }
-    if(ny_before == 20){
-      ny_reference <- 19
-    }
     Linf <- L_inf*rlnorm(ny*sim,0,sd_l) %>% matrix(ny,sim) # L_inf is the mean length, Linf is the varied L_inf in every year
-
     iaa <- apply(S2*naa*waa,2:3,sum)
     iaa_obs <- iaa*exp(epsiron_i-0.5*sd_i^2)
     Catch <- apply(wcaa,2:3,sum)
 
-    f <- LF_M <- L_mean <- matrix(0,ny,sim)
+    LF_M <- L_mean <- matrix(0,ny,sim)
+    r <- f <- b <- matrix(0,ny_after,sim)
     for(k in 1:sim){
       pooled_frequency_data <- data.frame()
       for(t in 1:ny_before){
@@ -321,10 +305,11 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
         pooled_frequency_data <- rbind(pooled_frequency_data,frequency_length)
       }
       lc <- Lc(pooled_frequency_data, pool = (ny_before-4):ny_before) # Lc is derived from the data in 96-100 years
-      L_mean <- Lmean(data = pooled_frequency_data, Lc = lc)
+      L_mean <- Lmean(data = pooled_frequency_data, Lc = lc) # 1-100 years L_mean data
       LF_M <- 0.75*lc@value+0.25*Linf
-      f <- L_mean@value/LF_M # Fmsy proxy
-
+      Itrigger <- 1.4*min(iaa_obs[(ny_before-ny_reference):ny_before,k]) # 1.4*Iloss (Iloss is the minimum biomass index)
+      f_proxy <- matrix(0,ny_before,sim);year_U <- which(L_mean@value[1:ny_before]/LF_M[1:ny_before,k] > 1)
+      f_proxy <- sum(Catch[year_U,k]/iaa_obs[year_U,k])/length(year_U)
 
       for(t in (ny_before+1):ny){
         naa[1,t,k] <- (alpha*SBt[t-1,k]/(beta+SBt[t-1,k]))*exp(epsiron_r[(t-ny_before),k]-0.5*sd_r^2) # Beverton-Holt type reproductive function
@@ -334,29 +319,26 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
         }
         naa[na,t,k] <- naa[na-1,t-1,k]*exp(-faa[na-1,t-1,k]-M[na-1]) + naa[na,t-1,k]*exp(-faa[na,t-1,k]-M[na])
 
-        r <- mean(iaa_obs[(t-3):(t-2),k])/mean(iaa_obs[(t-6):(t-4),k]) # biomass ratio (survey trend)
+        r[t-ny_before,k] <- mean(iaa_obs[(t-3):(t-2),k])/mean(iaa_obs[(t-6):(t-4),k]) # biomass ratio (survey trend)
+        f[t-ny_before,k] <- (L_mean@value/LF_M)[t-ny_before,k] # Fmsy proxy (1-100 years data for all sim-numbers)
+        b[t-ny_before,k] <- min(1,iaa_obs[t-2,k]/Itrigger) # biomass safeguard when the latest biomass index is less than Itrigger
 
-        # 2系ルールのシナリオからだとここをどう設定するか考える（管理開始前の期間が20年しかない）
-        # 2系ルールのシナリオからだと１年目からに設定することにした
-        Itrigger <- 1.4*min(iaa_obs[(ny_before-ny_reference):ny_before,k]) # 1.4*Iloss (Iloss is the minimum biomass index)
-
-        b <- min(1,iaa_obs[t-2,k]/Itrigger) # biomass safeguard when the latest biomass index is less than Itrigger
         ### according to the value of k, select the management tool
         if(k_von < 0.2){
           m <- 0.95
-          Catch[t,k] <- Catch[t-2,k]*r*f[t-2,k]*b*m
+          Catch[t,k] <- Catch[t-2,k]*r[t-ny_before,k]*f[t-ny_before,k]*b[t-ny_before,k]*m
         }else if(0.2 <= k_von & k_von < 0.32){
           m <- 0.9
-          Catch[t,k] <- Catch[t-2,k]*r*f[t-2,k]*b*m
-        }else if(0.32 <= k_von & k_von <= 0.45){ # only this case, need the all past "f" value
-          f_proxy <- sum(wcaa[,which(f[1:(t-2),k] > 1)])/sum(iaa_obs[which(f[1:(t-2),k] > 1)])/length(which(f[1:(t-2),k] > 1))
+          Catch[t,k] <- Catch[t-2,k]*r[t-ny_before,k]*f[t-ny_before,k]*b[t-ny_before,k]*m
+        }else if(0.32 <= k_von & k_von <= 0.45){
+          f_proxy
           m <- 0.5
-          Catch[t,k] <- Catch[t-2,k]*r*f_proxy*b*m
+          Catch[t,k] <- iaa_obs[t-2,k]*f_proxy*b[t-ny_before,k]*m
         }
-        if (b < 1){
+        if (b[t-ny_before,k] < 1){
           Catch[t,k] <- Catch[t,k]
         } else {
-          # note that the amount is more than 0.7 and less than 1.2 as the last catch amount when b < 1
+          # note that the amount is more than 0.7 and less than 1.2 as the last catch amount when b > 1
           Catch[t,k] <- min(1.2*Catch[t-2,k],max(Catch[t,k],0.7*Catch[t-2,k]))
         }
 
@@ -380,11 +362,10 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
         pooled_frequency_data <- rbind(pooled_frequency_data,frequency_length)
         L_mean <- Lmean(data = pooled_frequency_data, Lc = lc)
         LF_M <- 0.75*lc@value+0.25*Linf
-        f[t,] <- L_mean@value[t]/LF_M[t,] # Fmsy proxy
         ssb[,t,k] <- naa[,t,k]*maa*waa
         SBt[t,k] <- sum(ssb[,t,k], na.rm = T)
         iaa[t,k] <- sum(S2*naa[,t,k]*waa)
-        iaa_obs[t,k] <- iaa[t,k]*exp(epsiron_i[(t-ny_before),k]-0.5*sd_i^2)
+        iaa_obs[t,k] <- iaa[t,k]*exp(epsiron_i[t,k]-0.5*sd_i^2)
       }}
     wcaa <- waa*caa; baa <- waa*naa
     result_rule <- list(naa = naa,   # number of stock
@@ -395,6 +376,9 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
                         baa = baa,   # weight of stock biomass
                         iaa_obs = iaa_obs,          # biomass index
                         U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                        r = r,
+                        f = f,
+                        b = b,
                         ny_before = ny_before,
                         ny_after = ny_after,
                         year = 1:(ny_before+ny_after),   # years
@@ -419,29 +403,21 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
         }
         naa[na,t,k] <- naa[na-1,t-1,k]*exp(-faa[na-1,t-1,k]-M[na-1]) + naa[na,t-1,k]*exp(-faa[na,t-1,k]-M[na])
 
-        data_input <- data.frame(year = 1:(t-2), cpue = iaa_obs[1:(t-2),k], catch = Catch[1:(t-2),k])
-        ABC[t,k] <- calc_abc2(data_input)$ABC # 2年前までのデータを使用
-
-        # frasyr23のABC計算値とあっているか確認
-        catch <- Catch[1:(t-1),k];cpue <- iaa_obs[1:(t-1),k];year <- 1:(t-1)
-        data <- data.frame(catch,cpue,year)
-        data_check <- data %>% as_tibble() %>% rename("catch" = catch, "cpue" = cpue, "year" = year)
-        ABC_check <- calc_abc2(data_check[1:(t-2),],beta=1,summary_abc = FALSE)
-        if (ABC[t,k] == ABC_check[6]){
-          Catch[t,k] <- ABC[t,k]
-        }
+        data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+        ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE)$ABC # 2年前までのデータを使用
+        Catch[t,k] <- ABC[t,k]
 
         ### Catch[t]を与えてくれるようなF[t]を求める関数
         F_cal <- function(F_beta){
           Catch_plan <- sum(naa[,t,k]*(1-exp(-F_beta*Fmsy*saa))*exp(-M/2)*waa)
-          return(abs(Catch_plan-Catch[t,k]))
+          return(abs(Catch_plan-ABC[t,k]))
         }
-        faa[,t,k] <- optimize(F_cal, interval = c(0, 2))$minimum*Fmsy*saa
+        faa[,t,k] <- optimize(F_cal, interval = c(0, 5))$minimum*Fmsy*saa
         caa[,t,k] <- naa[,t,k]*(1-exp(-faa[,t,k]))*exp(-M/2)
         ssb[,t,k] <- naa[,t,k]*maa*waa
         SBt[t,k] <- sum(ssb[,t,k], na.rm = T)
         iaa[t,k] <- sum(S2*naa[,t,k]*waa)
-        iaa_obs[t,k] <- iaa[t,k]*exp(epsiron_i[(t-ny_before),k]-0.5*sd_i^2)
+        iaa_obs[t,k] <- iaa[t,k]*exp(epsiron_i[t,k]-0.5*sd_i^2)
       }}
     wcaa <- waa*caa; baa <- waa*naa
     result_rule <- list(naa = naa,   # number of stock
@@ -452,307 +428,205 @@ scenario_and_management_func <- function(scenario_organization, # "ICES" or "Jap
                         baa = baa,   # weight of stock biomass
                         iaa_obs = iaa_obs, # biomass index
                         U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                        r = matrix(0,ny_after,sim),
+                        f = matrix(0,ny_after,sim),
+                        b = matrix(0,ny_after,sim),
                         ny_before = ny_before,
                         ny_after = ny_after,
                         year = 1:(ny_before+ny_after), # years
                         method = "type2_rule")
   }
-return(result_rule)
+  return(result_rule)
 }
 
+# MSEの設定と実行
+MSE_result <- function(scenario_organization, # the organization for the scenario before management
+                       scenario, # the type of scenario before management if scenario_organization is "ICES"
+                       start, # the stock biomass in the start of scenario before management if scenario_organization is "Japan"
+                       end, # the stock biomass in the end of scenario before management if scenario_organization is "Japan"
+                       sd_r,
+                       sd_i,
+                       sd_l,
+                       sim){
+  management_rfb <- scenario_and_management(scenario_organization,
+                                            scenario,
+                                            start,
+                                            end,
+                                            rule = "rfb-rule",
+                                            sd_r,
+                                            sd_i,
+                                            sd_l,
+                                            sim)
+  management_type2 <- scenario_and_management(scenario_organization,
+                                              scenario,
+                                              start,
+                                              end,
+                                              rule = "type2-rule",
+                                              sd_r,
+                                              sd_i,
+                                              sd_l,
+                                              sim)
+  output <- tibble(management_rfb = management_rfb,
+                   management_type2 = management_type2,
+                   sim = sim)
+}
 
 # plot the simulation results
-plot_func <- function(management_rfb,management_type2){
-  simulation_result_WCAA <- rbind(
-    management_rfb$wcaa %>% apply(2:3,sum) %>%
+plot_MSE <- function(MSE_output){
+  Fmsy <- RP$Fmsy@.Data[1];Fcrash <- RP$Fcrash@.Data[1];MSY <- RP$MSY@.Data[1];SBmsy <- RP$SBmsy@.Data[1];Bmsy <- RP$Bmsy@.Data[1];SB0 <- RP$SB0@.Data[1];B0 <- RP$B0@.Data[1]
+  sim <- MSE_output$sim[1]
+  saa <- parameters$saa
+  ny_before <- MSE_output$management_rfb$ny_before
+
+  index_bind_type_1 <- function(management_result,index,RP_name){ # 年齢ごとのデータを取るタイプ
+    management_result[[index]] %>% apply(2:3,sum) %>%
       apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
       t %>% as_tibble() %>%
       set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_rfb$wcaa %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = management_rfb$wcaa[,,1] %>% apply(2,sum),
-             No2 = management_rfb$wcaa[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_rfb$wcaa[,,sim] %>% apply(2,sum)),
+      mutate(mean = management_result[[index]] %>% apply(2:3,sum) %>% apply(1, mean),
+             method = management_result[[15]], year = management_result[[14]],
+             No1 = management_result[[index]][,,1] %>% apply(2,sum),
+             No2 = management_result[[index]][,,round(sim/2)] %>% apply(2,sum),
+             No3 = management_result[[index]][,,sim] %>% apply(2,sum),
+             RP = RP_name)
+  }
 
-    management_type2$wcaa %>% apply(2:3,sum) %>%
+  index_bind_type_2 <- function(management_result,index,RP_name){ # 年齢ごとにデータを分けないタイプ
+    management_result[[index]] %>%
       apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
       t %>% as_tibble() %>%
       set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_type2$wcaa %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = management_type2$wcaa[,,1] %>% apply(2,sum),
-             No2 = management_type2$wcaa[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_type2$wcaa[,,sim] %>% apply(2,sum))
-  )
+      mutate(mean = management_result[[index]] %>% apply(1, mean),
+             method = management_result[[15]], year = management_result[[14]],
+             No1 = management_result[[index]][,1],
+             No2 = management_result[[index]][,round(sim/2)],
+             No3 = management_result[[index]][,sim],
+             RP = RP_name)
+  }
 
-  simulation_result_BAA <- rbind(
-    management_rfb$baa %>% apply(2:3,sum) %>%
+  index_bind_type_3 <- function(management_result){ # 漁獲係数用
+    (management_result[[5]]/saa) %>% apply(2:3,mean) %>%
       apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
       t %>% as_tibble() %>%
       set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_rfb$baa %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = management_rfb$baa[,,1] %>% apply(2,sum),
-             No2 = management_rfb$baa[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_rfb$baa[,,sim] %>% apply(2,sum)),
+      mutate(mean = (management_result[[5]]/saa) %>% apply(2, mean),
+             method = management_result[[15]], year = management_result[[14]],
+             No1 = (management_result[[5]][,,1]/saa) %>% apply(2,mean),
+             No2 = (management_result[[5]][,,round(sim/2)]/saa) %>% apply(2,mean),
+             No3 = (management_result[[5]][,,sim]/saa) %>% apply(2,mean),
+             RP = Fmsy)
+  }
 
-    management_type2$baa %>% apply(2:3,sum) %>%
+  index_bind_type_4 <- function(management_result,index,RP_name){ # rfbの結果
+    management_result[[index]] %>%
       apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
       t %>% as_tibble() %>%
       set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_type2$baa %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = management_type2$baa[,,1] %>% apply(2,sum),
-             No2 = management_type2$baa[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_type2$baa[,,sim] %>% apply(2,sum))
-  )
+      mutate(mean = management_result[[index]] %>% apply(1, mean),
+             method = management_result[[15]], year = 1:management_result[[13]],
+             No1 = management_result[[index]][,1],
+             No2 = management_result[[index]][,round(sim/2)],
+             No3 = management_result[[index]][,sim],
+             RP = RP_name)
+  }
 
-  simulation_result_SSB <- rbind(
-    management_rfb$ssb %>% apply(2:3,sum) %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_rfb$ssb %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = management_rfb$ssb[,,1] %>% apply(2,sum),
-             No2 = management_rfb$ssb[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_rfb$ssb[,,sim] %>% apply(2,sum)),
+  simulation_result_WCAA <- simulation_result_BAA <- simulation_result_SSB <- simulation_result_FAA <- simulation_result_IAA_OBS <- simulation_result_U <- simulation_result_r <- simulation_result_f <- simulation_result_b <- tibble()
+  for (i in 1:(ncol(MSE_output)-1)){
+    simulation_result_WCAA <- rbind(simulation_result_WCAA,index_bind_type_1(MSE_output[[i]],2,MSY))
+    simulation_result_BAA <- rbind(simulation_result_BAA,index_bind_type_1(MSE_output[[i]],6,Bmsy))
+    simulation_result_SSB <- rbind(simulation_result_SSB,index_bind_type_1(MSE_output[[i]],3,SBmsy))
+    simulation_result_FAA <- rbind(simulation_result_FAA,index_bind_type_3(MSE_output[[i]]))
+    simulation_result_IAA_OBS <- rbind(simulation_result_IAA_OBS,index_bind_type_2(MSE_output[[i]],7,NaN))
+    simulation_result_U <- rbind(simulation_result_U,index_bind_type_2(MSE_output[[i]],8,NaN))
+    simulation_result_r <- rbind(simulation_result_r,index_bind_type_4(MSE_output[[i]],9,1))
+    simulation_result_f <- rbind(simulation_result_f,index_bind_type_4(MSE_output[[i]],10,1))
+    simulation_result_b <- rbind(simulation_result_b,index_bind_type_4(MSE_output[[i]],11,1))
+  }
 
-    management_type2$ssb %>% apply(2:3,sum) %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_type2$ssb %>% apply(2:3,sum) %>% apply(1, mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = management_type2$ssb[,,1] %>% apply(2,sum),
-             No2 = management_type2$ssb[,,round(sim/2)] %>% apply(2,sum),
-             No3 = management_type2$ssb[,,sim] %>% apply(2,sum))
-  )
+  plot_res <- function(data, ylab_name, xlim_start, filename){
+    ggplot(data,aes(year,colour = method)) +
+      geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
+      geom_line(aes(y = val_10), size = 0.5) +
+      geom_line(aes(y = mean), size = 1) +
+      geom_line(aes(y = val_90), size = 0.5) +
 
-  simulation_result_FAA <- rbind(
-    (management_rfb$faa/saa) %>% apply(2:3,mean) %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = (management_rfb$faa/saa) %>% apply(2,mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = (management_rfb$faa[,,1]/saa) %>% apply(2,mean),
-             No2 = (management_rfb$faa[,,round(sim/2)]/saa) %>% apply(2,mean),
-             No3 = (management_rfb$faa[,,sim]/saa) %>% apply(2,mean)),
-
-    (management_type2$faa/saa) %>% apply(2:3,mean) %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = (management_type2$faa/saa) %>% apply(2,mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = (management_type2$faa[,,1]/saa) %>% apply(2,mean),
-             No2 = (management_type2$faa[,,round(sim/2)]/saa) %>% apply(2,mean),
-             No3 = (management_type2$faa[,,sim]/saa) %>% apply(2,mean))
-  )
-
-  simulation_result_IAA_OBS <- rbind(
-    management_rfb$iaa_obs %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_rfb$iaa_obs %>% apply(1, mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = management_rfb$iaa_obs[,1],
-             No2 = management_rfb$iaa_obs[,round(sim/2)],
-             No3 = management_rfb$iaa_obs[,sim]),
-
-    management_type2$iaa_obs %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_type2$iaa_obs %>% apply(1, mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = management_type2$iaa_obs[,1],
-             No2 = management_type2$iaa_obs[,round(sim/2)],
-             No3 = management_type2$iaa_obs[,sim])
-  )
-
-  simulation_result_U <- rbind(
-    management_rfb$U %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_rfb$U %>% apply(1, mean),
-             method = management_rfb$method, year = management_rfb$year,
-             No1 = management_rfb$U[,1],
-             No2 = management_rfb$U[,round(sim/2)],
-             No3 = management_rfb$U[,sim]),
-
-    management_type2$U %>%
-      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95))) %>%
-      t %>% as_tibble() %>%
-      set_names(c("val_10", "val_50", "val_90")) %>%
-      mutate(mean = management_type2$U %>% apply(1, mean),
-             method = management_type2$method, year = management_type2$year,
-             No1 = management_type2$U[,1],
-             No2 = management_type2$U[,round(sim/2)],
-             No3 = management_type2$U[,sim])
-  )
-
-  ggplot(simulation_result_WCAA[simulation_result_WCAA$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = MSY), size = 2, alpha = 0.6, col = "black") +
-    labs(x = "year", y = "catch")
-  ggsave("wcaa.png", width = 6, height = 4, dpi = 300)
-
-  ggplot(simulation_result_BAA[simulation_result_BAA$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = Bmsy), size = 2, alpha = 0.6, col = "black") +
-    labs(x = "year", y = "stock biomass")
-  ggsave("baa.png", width = 6, height = 4, dpi = 300)
-
-  ggplot(simulation_result_SSB[simulation_result_SSB$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = SBmsy), size = 2, alpha = 0.6, col = "black") +
-    labs(x = "year", y = "spawning stock biomass")
-  ggsave("ssb.png", width = 6, height = 4, dpi = 300)
-
-  ggplot(simulation_result_FAA[simulation_result_FAA$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = Fmsy), size = 2, alpha = 0.6, col = "black") +
-    labs(x = "year", y = "fishing mortality")
-  ggsave("faa.png", width = 6, height = 4, dpi = 300)
-
-  ggplot(simulation_result_IAA_OBS[simulation_result_IAA_OBS$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    labs(x = "year", y = "biomass index")
-  ggsave("iaa.png", width = 6, height = 4, dpi = 300)
-
-  ggplot(simulation_result_U[simulation_result_U$year >= 1,],aes(year,colour = method)) +
-    geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
-    geom_line(aes(y = val_10), size = 0.5) +
-    geom_line(aes(y = mean), size = 1) +
-    geom_line(aes(y = val_90), size = 0.5) +
-
-    # the trajectory of three replicates
-    geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
-    geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
-    labs(x = "year", y = "catch ratio")
-  ggsave("U.png", width = 6, height = 4, dpi = 300)
+      # the trajectory of three replicates
+      geom_line(aes(y = No1), size = 0.25, alpha = 0.6) +
+      geom_line(aes(y = No2), size = 0.25, alpha = 0.6) +
+      geom_line(aes(y = No3), size = 0.25, alpha = 0.6) +
+      geom_line(aes(y = RP), size = 2, alpha = 0.6, col = "black") +
+      geom_vline(xintercept = ny_before, lty = "31", col = "black") +
+      labs(x = "year", y = ylab_name) + xlim(xlim_start, max(data[6])) + ylim(0, ceiling(max(data[3])))
+    ggsave(filename, width = 6, height = 4, dpi = 300)
+  }
+  plot_res(simulation_result_WCAA[simulation_result_WCAA$year >= max((ny_before-24),1),], "Catch", max((ny_before-24),1), "wcaa.png")
+  plot_res(simulation_result_BAA[simulation_result_BAA$year >= max((ny_before-24),1),], "Biomass", max((ny_before-24),1), "baa.png")
+  plot_res(simulation_result_SSB[simulation_result_SSB$year >= max((ny_before-24),1),], "Spawning stock biomass", max((ny_before-24),1), "ssb.png")
+  plot_res(simulation_result_FAA[simulation_result_FAA$year >= max((ny_before-24),1),], "Fishing moratality", max((ny_before-24),1), "faa.png")
+  plot_res(simulation_result_IAA_OBS[simulation_result_IAA_OBS$year >= max((ny_before-24),1),], "Biomass index", max((ny_before-24),1), "iaa.png")
+  plot_res(simulation_result_U[simulation_result_U$year >= max((ny_before-24),1),], "U", max((ny_before-24),1), "U.png")
+  plot_res(simulation_result_r[simulation_result_r$year >= 1,], "r", 1, "r.png")
+  plot_res(simulation_result_f[simulation_result_f$year >= 1,], "f", 1, "f.png")
+  plot_res(simulation_result_b[simulation_result_b$year >= 1,], "b", 1, "b.png")
 }
 
 # パフォーマンス指標の計算
-performance_func <- function(management_rfb,management_type2){
-  ny_scenario <- management_rfb$ny_before;ny_HCR <- max(management_rfb$year)
+performance_MSE <- function(MSE_output){
+  Fmsy <- RP$Fmsy@.Data[1];Fcrash <- RP$Fcrash@.Data[1];MSY <- RP$MSY@.Data[1];SBmsy <- RP$SBmsy@.Data[1];Bmsy <- RP$Bmsy@.Data[1];SB0 <- RP$SB0@.Data[1];B0 <- RP$B0@.Data[1]
+  sim <- MSE_output$sim[1]
+  performance_calc <- function(management_result){
+    saa <- parameters$saa
+    ny_scenario <- management_result[[12]];ny_HCR <- max(management_result[[14]])
 
-  RB <- (management_rfb$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% median())/Bmsy
-  RC <- (management_rfb$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% median())/MSY
-  AAV <- abs((apply(management_rfb$wcaa[,ny_scenario:ny_HCR,],2,sum)-apply(management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/
-               ((apply(management_rfb$wcaa[,ny_scenario:ny_HCR,],2,sum)+apply(management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/2)) %>% median()
+    RB_short <- (management_result[[6]][,(ny_scenario+10),] %>% apply(2,sum) %>% median())/Bmsy
+    RC_short <- (management_result[[2]][,(ny_scenario+1):(ny_scenario+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+    RB_long <- (management_result[[6]][,(ny_scenario+21):(ny_scenario+30),]%>% apply(2:3,sum) %>% apply(2,mean) %>% median())/Bmsy
+    RC_long <- (management_result[[2]][,(ny_scenario+21):(ny_scenario+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+    AAV <- abs((apply(management_result[[2]][,ny_scenario:ny_HCR,],2:3,sum)-apply(management_result[[2]][,(ny_scenario-1):(ny_HCR-1),],2:3,sum))/
+                 ((apply(management_result[[2]][,ny_scenario:ny_HCR,],2:3,sum)+apply(management_result[[2]][,(ny_scenario-1):(ny_HCR-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
 
-  SSB_per_SBmsy <- ((management_rfb$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/SBmsy) %>% median()
-  catch_per_MSY <- ((management_rfb$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/MSY) %>% median()
-  F_per_Fmsy <- (((management_rfb$faa[,(ny_scenario+1):ny_HCR,]/saa) %>% apply(2:3,mean))/Fmsy) %>% median()
-  collapse_risk <- ((management_rfb$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.001)) %>% sum())/(sim*(ny_HCR-ny_scenario))
-  Blim_risk <- ((management_rfb$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.163)) %>% sum())/(sim*(ny_HCR-ny_scenario))
-  ICV <- (abs((management_rfb$wcaa[,(ny_scenario+1):ny_HCR,]-management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-2),]))/
-            management_rfb$wcaa[,(ny_scenario-1):(ny_HCR-2),]) %>% median()
-  per_ICES <- c(RB, RC, AAV, SSB_per_SBmsy, catch_per_MSY, F_per_Fmsy, collapse_risk, Blim_risk, ICV)
+    SSB_per_SBmsy <- ((management_result[[3]][,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/SBmsy) %>% median()
+    catch_per_MSY <- ((management_result[[2]][,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/MSY) %>% median()
+    F_per_Fmsy <- (((management_result[[5]][,(ny_scenario+1):ny_HCR,]/saa) %>% apply(2:3,mean))/Fmsy) %>% median()
+    collapse_risk <- ((management_result[[3]][,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.001)) %>% sum())/(sim*(ny_HCR-ny_scenario))
+    Blim_risk <- ((management_result[[3]][,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.163)) %>% sum())/(sim*(ny_HCR-ny_scenario))
+    ICV <- (abs((management_result[[2]][,(ny_scenario+1):ny_HCR,]-management_result[[2]][,(ny_scenario-1):(ny_HCR-2),]))/
+              management_result[[2]][,(ny_scenario-1):(ny_HCR-2),]) %>% median()
 
-  #
-  ny_scenario <- management_type2$ny_before;ny_HCR <- max(management_type2$year)
+    performance <- c(management_result[[15]], RB_short, RC_short, RB_long, RC_long, AAV, SSB_per_SBmsy, catch_per_MSY, F_per_Fmsy, collapse_risk, Blim_risk, ICV)
+  }
 
-  RB <- (management_type2$baa[,(ny_HCR-9):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% median())/Bmsy
-  RC <- (management_type2$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum) %>% apply(1,mean) %>% median())/MSY
-  AAV <- abs((apply(management_type2$wcaa[,ny_scenario:ny_HCR,],2,sum)-apply(management_type2$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/
-               ((apply(management_type2$wcaa[,ny_scenario:ny_HCR,],2,sum)+apply(management_type2$wcaa[,(ny_scenario-1):(ny_HCR-1),],2,sum))/2)) %>% median()
-
-  SSB_per_SBmsy <- ((management_type2$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/SBmsy) %>% median()
-  catch_per_MSY <- ((management_type2$wcaa[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum))/MSY) %>% median()
-  F_per_Fmsy <- (((management_type2$faa[,(ny_scenario+1):ny_HCR,]/saa) %>% apply(2:3,mean))/Fmsy) %>% median()
-  collapse_risk <- ((management_type2$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.001)) %>% sum())/(sim*(ny_HCR-ny_scenario))
-  Blim_risk <- ((management_type2$ssb[,(ny_scenario+1):ny_HCR,] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > SB0*0.163)) %>% sum())/(sim*(ny_HCR-ny_scenario))
-  ICV <- (abs((management_type2$wcaa[,(ny_scenario+1):ny_HCR,]-management_type2$wcaa[,(ny_scenario-1):(ny_HCR-2),]))/
-            management_type2$wcaa[,(ny_scenario-1):(ny_HCR-2),]) %>% median()
-  per_Japan <- c(RB, RC, AAV, SSB_per_SBmsy, catch_per_MSY, F_per_Fmsy, collapse_risk, Blim_risk, ICV)
-
-  performance <- rbind(per_ICES,per_Japan)
-  colnames(performance) <- c("RB","RC","AAV","SSB_per_SBmsy","catch_per_MSY", "F_per_Fmsy", "collapse_risk", "Blim_risk", "ICV")
-  return(performance)
+  performance <- tibble()
+  for (i in 1:(ncol(MSE_output)-1)){
+    performance <- rbind(performance,performance_calc(MSE_output[[i]]))
+    colnames(performance) <- c("HCR","RB_short","RC_short","RB_long","RC_long","AAV","SSB_per_SBmsy","catch_per_MSY","F_per_Fmsy","collapse_risk","Blim_risk","ICV")
+  }
+return(performance)
 }
 
 # パラメータの設定
 ## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-a = 0.0076 # allometry parameter
-b = 3.069 # allometry parameter
-L_inf = 85.6 # von Bertalanffy growth parameter
-L50 = 47.1 # length at 50% maturity
-a50 = 4.105405 # age at 50% maturity
-t0 = -0.1 # von Bertalanffy growth parameter
-k_von = 0.19 # von Bertalanffy growth parameter
-waa = c(49.814,241.392,582.492,1035.893,1554.692,2097.365,2632.557,3139.195,3604.783,4023.284,4393.168,4715.836,4994.442,5233.054,5436.088,5607.948) # catch weight at age
-alpha = 1.17596948093898 # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-beta = 90.9090909090909
-sd_r = 0.6
-sd_i = 0.2
-sd_l = 0.1
-sim = 10
-parametars <- stock_parametars() # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S)))
-na <- parametars$na;ver_stk <- parametars$ver_stk;maa <- parametars$maa;waa <- parametars$waa;saa <- parametars$saa;M <- parametars$M;alpha <- parametars$alpha;beta <- parametars$beta;S2 <- parametars$S2;laa <- parametars$laa;L_inf <- parametars$L_inf
+parameters <- stock_parameters(a = 0.0076, # allometry parameter
+                               b = 3.069, # allometry parameter
+                               L_inf = 85.6, # von Bertalanffy growth parameter
+                               L50 = 47.1, # length at 50% maturity
+                               a50 = 4.105405, # age at 50% maturity
+                               t0 = -0.1, # von Bertalanffy growth parameter
+                               k_von = 0.19, # von Bertalanffy growth parameter
+                               waa = c(49.814,241.392,582.492,1035.893,1554.692,2097.365,2632.557,3139.195,3604.783,4023.284,4393.168,4715.836,4994.442,5233.054,5436.088,5607.948), # catch weight at age
+                               alpha = 1.17596948093898, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
+                               beta = 90.9090909090909) # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S)))
 
-RP <- reference_points_func(na,ver_stk,maa,waa,saa,M,alpha,beta)
-Fmsy <- RP$Fmsy@.Data[1];Fcrash <- RP$Fcrash@.Data[1];MSY <- RP$MSY@.Data[1];SBmsy <- RP$SBmsy@.Data[1];Bmsy <- RP$Bmsy@.Data[1];SB0 <- RP$SB0@.Data[1];B0 <- RP$B0@.Data[1]
+RP <- reference_points(parameters)
 
-# 管理開始前シナリオの設定と実行
-management_rfb <- scenario_and_management_func(scenario_organization = "Japan",
-                                               scenario = "one-way",
-                                               start = 0.75,
-                                               end = 0.75,
-                                               rule = "rfb-rule")
+MSE_output <- MSE_result(scenario_organization = "ICES",
+                         scenario = "one-way",
+                         start = 0.25,
+                         end = 0.25,
+                         sd_r = 0.6,
+                         sd_i = 0.2,
+                         sd_l = 0.1,
+                         sim = 1000)
 
-
-management_type2 <- scenario_and_management_func(scenario_organization = "Japan",
-                                                 scenario = "one-way",
-                                                 start = 0.75,
-                                                 end = 0.75,
-                                                 rule = "type2-rule")
-
-plot_func(management_rfb,management_type2)
-performance_func(management_rfb,management_type2)
+plot_MSE(MSE_output)
+performance_MSE(MSE_output)
