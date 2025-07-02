@@ -7,6 +7,7 @@ library(ggplot2)
 library(remotes)
 library(cat3advice)
 library(patchwork)
+library(lemon)
 source("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/CopyOffunctions.R")
 
 t95 = 1 # steepness of maturity curve
@@ -33,7 +34,7 @@ source("Fig3.R")
 parameters <- stock_parameters(plaice_data)
 MSE_output <- readRDS("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/plaice/simulations/results_plaice.RDS")
 source("Fig1.R")
-ylim_mean <- 3;ylim_ribbon <- 10
+ylim_mean <- 4;ylim_ribbon <- 10
 source("Fig3.R")
 
 parameters <- stock_parameters(anchovy_data)
@@ -45,5 +46,5 @@ source("Fig3.R")
 parameters <- stock_parameters(thornbackray_data)
 MSE_output <- readRDS("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/thornbackray/simulations/results_thornbackray.RDS")
 source("Fig1.R")
-ylim_mean <- 3;ylim_ribbon <- 10
+ylim_mean <- 3;ylim_ribbon <- 5
 source("Fig3.R")

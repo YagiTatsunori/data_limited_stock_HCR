@@ -137,7 +137,7 @@ p1 <- ggplot(result_oneway[result_oneway$year >= 76,],aes(year,colour = method))
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
         axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (i)")
 p2 <- ggplot(result_rollercoaster[result_rollercoaster$year >= 76,],aes(year,colour = method)) +
   geom_line(aes(y = mean), linewidth = 1) +
@@ -159,7 +159,7 @@ p2 <- ggplot(result_rollercoaster[result_rollercoaster$year >= 76,],aes(year,col
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
         axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (ii)")
 p3 <- ggplot(result_confusion,aes(year,colour = method)) +
   geom_line(aes(y = mean), linewidth = 1) +
@@ -181,7 +181,7 @@ p3 <- ggplot(result_confusion,aes(year,colour = method)) +
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
         axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (iii)")
 (p1 | p2 | p3)
 ggsave(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/FIG3_mean_",parameters$fish,".jpg"), width = 300, height = 170, units = "mm", dpi = 300)
@@ -211,8 +211,9 @@ p1 <- ggplot(result_oneway[result_oneway$year >= 76,],aes(year,colour = method))
         legend.text = element_text(size = 20),
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
-        axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+        axis.ticks.length = unit(0.3,"cm"),
+        strip.text = element_text(size = 14)) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (i)")
 p2 <- ggplot(result_rollercoaster[result_rollercoaster$year >= 76,],aes(year,colour = method)) +
   geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
@@ -239,8 +240,9 @@ p2 <- ggplot(result_rollercoaster[result_rollercoaster$year >= 76,],aes(year,col
         legend.text = element_text(size = 20),
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
-        axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+        axis.ticks.length = unit(0.3,"cm"),
+        strip.text = element_text(size = 14)) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (ii)")
 p3 <- ggplot(result_confusion,aes(year,colour = method)) +
   geom_ribbon(aes(ymin = val_10, ymax = val_90, fill = method), alpha = 0.3) +
@@ -267,8 +269,9 @@ p3 <- ggplot(result_confusion,aes(year,colour = method)) +
         legend.text = element_text(size = 20),
         legend.title = element_text(size = 20),
         legend.key.spacing.y = unit(1, 'lines'),
-        axis.ticks.length = unit(0.3,"cm")) +
-  facet_grid(index ~ .) +
+        axis.ticks.length = unit(0.3,"cm"),
+        strip.text = element_text(size = 14)) +
+  facet_rep_grid(index ~ ., repeat.tick.labels = FALSE) +
   ggtitle("scenario (iii)")
 (p1 | p2 | p3)
 ggsave(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/FIG3_ribbon_",parameters$fish,".jpg"), width = 300, height = 170, units = "mm", dpi = 300)

@@ -215,7 +215,7 @@ scenario_and_management <- function(parameters,
                                     GA,
                                     custom,
                                     scenario_organization, # "ICES" or "Japan"
-                                    scenario, # "one-way" or "roller-coaster"
+                                    scenario, # "one_way" or "roller_coaster"
                                     start, # 0.75 or 0.5 or 0.25
                                     end, # 0.75 or 0.5 or 0.25
                                     rule,
@@ -265,12 +265,12 @@ scenario_and_management <- function(parameters,
         ny_history <- 25 # year for management to converge in equivalent
         ny_before <- ny_0.5Fmsy+ny_history # years before management
         F_initial <- rep(0.5*Fmsy,75)
-        if(scenario == "one-way"){
+        if(scenario == "one_way"){
           f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
           rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
           F_history <- rate ^ (seq(0, length(scen_period)))*f0
           F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
-        }else if(scenario == "roller-coaster"){
+        }else if(scenario == "roller_coaster"){
           f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
           F_history <- rep(NA, length(years))
           rateup <- log(fmax/f0)/9
@@ -394,7 +394,7 @@ scenario_and_management <- function(parameters,
         L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value # 1-100 years L_mean data
         LF_M[[k]] <- theta*lc[[k]]@value+(1-theta)*Linf[,k]
       }
-      Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # (1+tau)*Iloss (Iloss is the minimum biomass index)
+      Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # 1.4*Iloss (Iloss is the minimum biomass index)
 
       # ここからrfbルール
       if(rule == "rfb_rule"){
@@ -991,12 +991,12 @@ scenario_and_management <- function(parameters,
         ny_history <- 25 # year for management to converge in equivalent
         ny_before <- ny_0.5Fmsy+ny_history # years before management
         F_initial <- rep(0.5*Fmsy,75)
-        if(scenario == "one-way"){
+        if(scenario == "one_way"){
           f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
           rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
           F_history <- rate ^ (seq(0, length(scen_period)))*f0
           F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
-        }else if(scenario == "roller-coaster"){
+        }else if(scenario == "roller_coaster"){
           f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
           F_history <- rep(NA, length(years))
           rateup <- log(fmax/f0)/9
@@ -1566,20 +1566,17 @@ scenario_and_management <- function(parameters,
     # custom=1:HCR中のパラメータはデフォルトではない
   }else if(custom==1){
     Btarget <- Btarget; Blimit <- Blimit; delta1 <- delta1; delta2 <- delta2; delta3 <- delta3; tau <- tau; theta <- theta; m <- m
-    naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
-    SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
-
     if(scenario_organization == "ICES"){
       ny_0.5Fmsy <- 75 # year for management to converge in equivalent
       ny_history <- 25 # year for management to converge in equivalent
       ny_before <- ny_0.5Fmsy+ny_history # years before management
       F_initial <- rep(0.5*Fmsy,75)
-      if(scenario == "one-way"){
+      if(scenario == "one_way"){
         f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
         rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
         F_history <- rate ^ (seq(0, length(scen_period)))*f0
         F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
-      }else if(scenario == "roller-coaster"){
+      }else if(scenario == "roller_coaster"){
         f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
         F_history <- rep(NA, length(years))
         rateup <- log(fmax/f0)/9
@@ -1687,6 +1684,7 @@ scenario_and_management <- function(parameters,
     colnames(pooled_frequency_data) <- c("year","length", "numbers")
     pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
     pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
+
     for(k in 1:sim){
       for(t in 1:ny_before){
         numbers <- as.vector(t(caa[,t,k]*probs))
@@ -2010,7 +2008,7 @@ MSE_result <- function(parameters,
                                             GA,
                                             custom,
                                             scenario_organization, # "ICES" or "Japan"
-                                            scenario, # "one-way" or "roller-coaster"
+                                            scenario, # "one_way" or "roller_coaster"
                                             start, # 0.75 or 0.5 or 0.25
                                             end, # 0.75 or 0.5 or 0.25
                                             rule = "rfb_rule")
@@ -2018,7 +2016,7 @@ MSE_result <- function(parameters,
                                             GA,
                                             custom,
                                             scenario_organization, # "ICES" or "Japan"
-                                            scenario, # "one-way" or "roller-coaster"
+                                            scenario, # "one_way" or "roller_coaster"
                                             start, # 0.75 or 0.5 or 0.25
                                             end, # 0.75 or 0.5 or 0.25
                                             rule = "chr_rule")
@@ -2026,7 +2024,7 @@ MSE_result <- function(parameters,
                                               GA,
                                               custom,
                                               scenario_organization, # "ICES" or "Japan"
-                                              scenario, # "one-way" or "roller-coaster"
+                                              scenario, # "one_way" or "roller_coaster"
                                               start, # 0.75 or 0.5 or 0.25
                                               end, # 0.75 or 0.5 or 0.25
                                               rule = "type2_rule")
@@ -2034,7 +2032,7 @@ MSE_result <- function(parameters,
                                                      GA,
                                                      custom,
                                                      scenario_organization, # "ICES" or "Japan"
-                                                     scenario, # "one-way" or "roller-coaster"
+                                                     scenario, # "one_way" or "roller_coaster"
                                                      start, # 0.75 or 0.5 or 0.25
                                                      end, # 0.75 or 0.5 or 0.25
                                                      rule = "ICES_average")
@@ -2042,7 +2040,7 @@ MSE_result <- function(parameters,
                                                           GA,
                                                           custom,
                                                           scenario_organization, # "ICES" or "Japan"
-                                                          scenario, # "one-way" or "roller-coaster"
+                                                          scenario, # "one_way" or "roller_coaster"
                                                           start, # 0.75 or 0.5 or 0.25
                                                           end, # 0.75 or 0.5 or 0.25
                                                           rule = "type2_rule_length")
@@ -2050,7 +2048,7 @@ MSE_result <- function(parameters,
                                                 GA,
                                                 custom,
                                                 scenario_organization, # "ICES" or "Japan"
-                                                scenario, # "one-way" or "roller-coaster"
+                                                scenario, # "one_way" or "roller_coaster"
                                                 start, # 0.75 or 0.5 or 0.25
                                                 end, # 0.75 or 0.5 or 0.25
                                                 rule = "f_fix_1")
@@ -2058,7 +2056,7 @@ MSE_result <- function(parameters,
                                                          GA,
                                                          custom,
                                                          scenario_organization, # "ICES" or "Japan"
-                                                         scenario, # "one-way" or "roller-coaster"
+                                                         scenario, # "one_way" or "roller_coaster"
                                                          start, # 0.75 or 0.5 or 0.25
                                                          end, # 0.75 or 0.5 or 0.25
                                                          rule = "ICES_target_CPUE")
@@ -2120,7 +2118,7 @@ GA_result <- function(parameters, scenario_organization, scenario, start, end, r
                                                         GA = 1,
                                                         custom = 1,
                                                         scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
+                                                        scenario, # "one_way" or "roller_coaster"
                                                         start, # 0.75 or 0.5 or 0.25
                                                         end, # 0.75 or 0.5 or 0.25
                                                         rule,
@@ -2153,7 +2151,7 @@ GA_result <- function(parameters, scenario_organization, scenario, start, end, r
                                                         GA = 1,
                                                         custom = 1,
                                                         scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
+                                                        scenario, # "one_way" or "roller_coaster"
                                                         start, # 0.75 or 0.5 or 0.25
                                                         end, # 0.75 or 0.5 or 0.25
                                                         rule,
@@ -2183,7 +2181,7 @@ GA_result <- function(parameters, scenario_organization, scenario, start, end, r
                                                         GA = 1,
                                                         custom = 1,
                                                         scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
+                                                        scenario, # "one_way" or "roller_coaster"
                                                         start, # 0.75 or 0.5 or 0.25
                                                         end, # 0.75 or 0.5 or 0.25
                                                         rule,
@@ -2204,7 +2202,7 @@ GA_result <- function(parameters, scenario_organization, scenario, start, end, r
                                                         GA = 1,
                                                         custom = 1,
                                                         scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
+                                                        scenario, # "one_way" or "roller_coaster"
                                                         start, # 0.75 or 0.5 or 0.25
                                                         end, # 0.75 or 0.5 or 0.25
                                                         rule,
@@ -2216,141 +2214,141 @@ GA_result <- function(parameters, scenario_organization, scenario, start, end, r
          parallel = TRUE, keepBest = TRUE, monitor = customMonitor, seed = 1234)
     }}
 
-  GA_oneway <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)
-  GA_rollercoaster <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)
-  GA_075_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)
-  GA_05_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)
+  GA_oneway <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule)
+  GA_rollercoaster <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule)
   GA_025_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)
-  GA_075_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)
-  GA_05_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)
+  GA_05_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)
+  GA_075_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)
   GA_025_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)
-  GA_075_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)
-  GA_05_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)
+  GA_05_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)
+  GA_075_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)
   GA_025_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)
+  GA_05_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)
+  GA_075_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)
 
   optimized_result <- matrix(NA,22,(8+para_numb))
   optimized_result[,1] <- c(rep("origin",11),rep("optimized",11))
-  optimized_result[,2] <- rep(c("one-way","roller-coaster","075_025","05_025","025_025","075_05","05_05","025_05","075_075","05_075","025_075"),2)
+  optimized_result[,2] <- rep(c("one_way","roller_coaster","025_025","05_025","075_025","025_05","05_05","075_05","025_075","05_075","075_075"),2)
 
-  optimized_result[1,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)[18:23])
-  optimized_result[2,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)[18:23])
-  optimized_result[3,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
+  optimized_result[1,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule)[18:23])
+  optimized_result[2,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule)[18:23])
+  optimized_result[3,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
   optimized_result[4,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)[18:23])
-  optimized_result[5,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
-  optimized_result[6,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
+  optimized_result[5,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
+  optimized_result[6,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
   optimized_result[7,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)[18:23])
-  optimized_result[8,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
-  optimized_result[9,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
+  optimized_result[8,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
+  optimized_result[9,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
   optimized_result[10,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)[18:23])
-  optimized_result[11,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
+  optimized_result[11,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
 
-  process_numb <- length(GA_oneway@bestSol)+length(GA_rollercoaster@bestSol)+length(GA_075_025@bestSol)+length(GA_05_025@bestSol)+length(GA_025_025@bestSol)+length(GA_075_05@bestSol)+length(GA_05_05@bestSol)+length(GA_025_05@bestSol)+length(GA_075_075@bestSol)+length(GA_05_075@bestSol)+length(GA_025_075@bestSol)
-  optimize_process <- matrix(NA,process_numb,(4+para_numb))
+  optimized_process <- rbind(cbind(parameters$fish,rule,"one_way",matrix(unlist(GA_oneway@bestSol),length(GA_oneway@bestSol),para_numb,byrow = TRUE),GA_oneway@summary[,1]-10),
+                             cbind(parameters$fish,rule,"roller_coaster",matrix(unlist(GA_rollercoaster@bestSol),length(GA_rollercoaster@bestSol),para_numb,byrow = TRUE),GA_rollercoaster@summary[,1]-10),
+                             cbind(parameters$fish,rule,"025_025",matrix(unlist(GA_025_025@bestSol),length(GA_025_025@bestSol),para_numb,byrow = TRUE),GA_025_025@summary[,1]-10),
+                             cbind(parameters$fish,rule,"05_025",matrix(unlist(GA_05_025@bestSol),length(GA_05_025@bestSol),para_numb,byrow = TRUE),GA_05_025@summary[,1]-10),
+                             cbind(parameters$fish,rule,"075_025",matrix(unlist(GA_075_025@bestSol),length(GA_075_025@bestSol),para_numb,byrow = TRUE),GA_075_025@summary[,1]-10),
+                             cbind(parameters$fish,rule,"025_05",matrix(unlist(GA_025_05@bestSol),length(GA_025_05@bestSol),para_numb,byrow = TRUE),GA_025_05@summary[,1]-10),
+                             cbind(parameters$fish,rule,"05_05",matrix(unlist(GA_05_05@bestSol),length(GA_05_05@bestSol),para_numb,byrow = TRUE),GA_05_05@summary[,1]-10),
+                             cbind(parameters$fish,rule,"075_05",matrix(unlist(GA_075_05@bestSol),length(GA_075_05@bestSol),para_numb,byrow = TRUE),GA_075_05@summary[,1]-10),
+                             cbind(parameters$fish,rule,"025_075",matrix(unlist(GA_025_075@bestSol),length(GA_025_075@bestSol),para_numb,byrow = TRUE),GA_025_075@summary[,1]-10),
+                             cbind(parameters$fish,rule,"05_075",matrix(unlist(GA_05_075@bestSol),length(GA_05_075@bestSol),para_numb,byrow = TRUE),GA_05_075@summary[,1]-10),
+                             cbind(parameters$fish,rule,"075_075",matrix(unlist(GA_075_075@bestSol),length(GA_075_075@bestSol),para_numb,byrow = TRUE),GA_075_075@summary[,1]-10))
 
   if(rule == "type2_rule" | rule == "type2_rule_length"){
     colnames(optimized_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
-    optimized_result[,9:13] <- c(0.8, 0.7, 0.5, 0.4, 0.4)
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, Btarget = GA_oneway@solution[1,1], Blimit = GA_oneway@solution[1,2], delta1 = GA_oneway@solution[1,3], delta2 = GA_oneway@solution[1,4], delta3 = GA_oneway@solution[1,5])[1:6])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, Btarget = GA_rollercoaster@solution[1,1], Blimit = GA_rollercoaster@solution[1,2], delta1 = GA_rollercoaster@solution[1,3], delta2 = GA_rollercoaster@solution[1,4], delta3 = GA_rollercoaster@solution[1,5]))[1:6]
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = GA_075_025@solution[1,1], Blimit = GA_075_025@solution[1,2], delta1 = GA_075_025@solution[1,3], delta2 = GA_075_025@solution[1,4], delta3 = GA_075_025@solution[1,5]))[1:6]
+    optimized_result[,9:(8+para_numb)] <- matrix(c(0.8,0.7,0.5,0.4,0.4),nrow = 22,ncol = para_numb,byrow = TRUE)
+    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, Btarget = GA_oneway@solution[1,1], Blimit = GA_oneway@solution[1,2], delta1 = GA_oneway@solution[1,3], delta2 = GA_oneway@solution[1,4], delta3 = GA_oneway@solution[1,5])[1:6])
+    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, Btarget = GA_rollercoaster@solution[1,1], Blimit = GA_rollercoaster@solution[1,2], delta1 = GA_rollercoaster@solution[1,3], delta2 = GA_rollercoaster@solution[1,4], delta3 = GA_rollercoaster@solution[1,5]))[1:6]
+    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = GA_025_025@solution[1,1], Blimit = GA_025_025@solution[1,2], delta1 = GA_025_025@solution[1,3], delta2 = GA_025_025@solution[1,4], delta3 = GA_025_025@solution[1,5]))[1:6]
     optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, Btarget = GA_05_025@solution[1,1], Blimit = GA_05_025@solution[1,2], delta1 = GA_05_025@solution[1,3], delta2 = GA_05_025@solution[1,4], delta3 = GA_05_025@solution[1,5]))[1:6]
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = GA_025_025@solution[1,1], Blimit = GA_025_025@solution[1,2], delta1 = GA_025_025@solution[1,3], delta2 = GA_025_025@solution[1,4], delta3 = GA_025_025@solution[1,5]))[1:6]
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = GA_075_05@solution[1,1], Blimit = GA_075_05@solution[1,2], delta1 = GA_075_05@solution[1,3], delta2 = GA_075_05@solution[1,4], delta3 = GA_075_05@solution[1,5]))[1:6]
+    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = GA_075_025@solution[1,1], Blimit = GA_075_025@solution[1,2], delta1 = GA_075_025@solution[1,3], delta2 = GA_075_025@solution[1,4], delta3 = GA_075_025@solution[1,5]))[1:6]
+    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = GA_025_05@solution[1,1], Blimit = GA_025_05@solution[1,2], delta1 = GA_025_05@solution[1,3], delta2 = GA_025_05@solution[1,4], delta3 = GA_025_05@solution[1,5]))[1:6]
     optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, Btarget = GA_05_05@solution[1,1], Blimit = GA_05_05@solution[1,2], delta1 = GA_05_05@solution[1,3], delta2 = GA_05_05@solution[1,4], delta3 = GA_05_05@solution[1,5]))[1:6]
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = GA_025_05@solution[1,1], Blimit = GA_025_05@solution[1,2], delta1 = GA_025_05@solution[1,3], delta2 = GA_025_05@solution[1,4], delta3 = GA_025_05@solution[1,5]))[1:6]
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = GA_075_075@solution[1,1], Blimit = GA_075_075@solution[1,2], delta1 = GA_075_075@solution[1,3], delta2 = GA_075_075@solution[1,4], delta3 = GA_075_075@solution[1,5]))[1:6]
+    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = GA_075_05@solution[1,1], Blimit = GA_075_05@solution[1,2], delta1 = GA_075_05@solution[1,3], delta2 = GA_075_05@solution[1,4], delta3 = GA_075_05@solution[1,5]))[1:6]
+    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = GA_025_075@solution[1,1], Blimit = GA_025_075@solution[1,2], delta1 = GA_025_075@solution[1,3], delta2 = GA_025_075@solution[1,4], delta3 = GA_025_075@solution[1,5]))[1:6]
     optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, Btarget = GA_05_075@solution[1,1], Blimit = GA_05_075@solution[1,2], delta1 = GA_05_075@solution[1,3], delta2 = GA_05_075@solution[1,4], delta3 = GA_05_075@solution[1,5]))[1:6]
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = GA_025_075@solution[1,1], Blimit = GA_025_075@solution[1,2], delta1 = GA_025_075@solution[1,3], delta2 = GA_025_075@solution[1,4], delta3 = GA_025_075@solution[1,5]))[1:6]
+    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = GA_075_075@solution[1,1], Blimit = GA_075_075@solution[1,2], delta1 = GA_075_075@solution[1,3], delta2 = GA_075_075@solution[1,4], delta3 = GA_075_075@solution[1,5]))[1:6]
 
-    colnames(optimize_process) <- c("fish","HCR","scenario","Btarget","Blimit","delta1","delta2","delta3","RC_long")
+    colnames(optimized_process) <- c("fish","HCR","scenario","Btarget","Blimit","delta1","delta2","delta3","RC_long")
   }
 
   if(rule == "rfb_rule" | rule == "ICES_average"){
     colnames(optimized_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
-    optimized_result[,9:11] <- c(m_default, 0.4, 0.75)
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, m = GA_oneway@solution[1,1], tau = GA_oneway@solution[1,2], theta = GA_oneway@solution[1,3])[1:6])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, m = GA_rollercoaster@solution[1,1], tau = GA_rollercoaster@solution[1,2], theta = GA_rollercoaster@solution[1,3])[1:6])
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = GA_075_025@solution[1,1], tau = GA_075_025@solution[1,2], theta = GA_075_025@solution[1,3])[1:6])
+    optimized_result[,9:(8+para_numb)] <- matrix(c(m_default, 0.4, 0.75),nrow = 22,ncol = para_numb,byrow = TRUE)
+    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, m = GA_oneway@solution[1,1], tau = GA_oneway@solution[1,2], theta = GA_oneway@solution[1,3])[1:6])
+    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, m = GA_rollercoaster@solution[1,1], tau = GA_rollercoaster@solution[1,2], theta = GA_rollercoaster@solution[1,3])[1:6])
+    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = GA_025_025@solution[1,1], tau = GA_025_025@solution[1,2], theta = GA_025_025@solution[1,3])[1:6])
     optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, m = GA_05_025@solution[1,1], tau = GA_05_025@solution[1,2], theta = GA_05_025@solution[1,3])[1:6])
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = GA_025_025@solution[1,1], tau = GA_025_025@solution[1,2], theta = GA_025_025@solution[1,3])[1:6])
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = GA_075_05@solution[1,1], tau = GA_075_05@solution[1,2], theta = GA_075_05@solution[1,3])[1:6])
+    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = GA_075_025@solution[1,1], tau = GA_075_025@solution[1,2], theta = GA_075_025@solution[1,3])[1:6])
+    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = GA_025_05@solution[1,1], tau = GA_025_05@solution[1,2], theta = GA_025_05@solution[1,3])[1:6])
     optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, m = GA_05_05@solution[1,1], tau = GA_05_05@solution[1,2], theta = GA_05_05@solution[1,3])[1:6])
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = GA_025_05@solution[1,1], tau = GA_025_05@solution[1,2], theta = GA_025_05@solution[1,3])[1:6])
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = GA_075_075@solution[1,1], tau = GA_075_075@solution[1,2], theta = GA_075_075@solution[1,3])[1:6])
+    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = GA_075_05@solution[1,1], tau = GA_075_05@solution[1,2], theta = GA_075_05@solution[1,3])[1:6])
+    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = GA_025_075@solution[1,1], tau = GA_025_075@solution[1,2], theta = GA_025_075@solution[1,3])[1:6])
     optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, m = GA_05_075@solution[1,1], tau = GA_05_075@solution[1,2], theta = GA_05_075@solution[1,3])[1:6])
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = GA_025_075@solution[1,1], tau = GA_025_075@solution[1,2], theta = GA_025_075@solution[1,3])[1:6])
+    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = GA_075_075@solution[1,1], tau = GA_075_075@solution[1,2], theta = GA_075_075@solution[1,3])[1:6])
 
-    colnames(optimize_process) <- c("fish","HCR","scenario","m","tau","theta","RC_long")
+    colnames(optimized_process) <- c("fish","HCR","scenario","m","tau","theta","RC_long")
   }
 
   if(rule == "chr_rule"){
     colnames(optimized_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m")
-    optimized_result[,9] <- m_default
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, m = GA_oneway@solution[1,1])[1:6])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, m = GA_rollercoaster@solution[1,1])[1:6])
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = GA_075_025@solution[1,1])[1:6])
+    optimized_result[,9:(8+para_numb)] <- matrix(m_default,nrow = 22,ncol = para_numb,byrow = TRUE)
+    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, m = GA_oneway@solution[1,1])[1:6])
+    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, m = GA_rollercoaster@solution[1,1])[1:6])
+    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = GA_025_025@solution[1,1])[1:6])
     optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, m = GA_05_025@solution[1,1])[1:6])
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = GA_025_025@solution[1,1])[1:6])
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = GA_075_05@solution[1,1])[1:6])
+    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = GA_075_025@solution[1,1])[1:6])
+    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = GA_025_05@solution[1,1])[1:6])
     optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, m = GA_05_05@solution[1,1])[1:6])
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = GA_025_05@solution[1,1])[1:6])
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = GA_075_075@solution[1,1])[1:6])
+    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = GA_075_05@solution[1,1])[1:6])
+    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = GA_025_075@solution[1,1])[1:6])
     optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, m = GA_05_075@solution[1,1])[1:6])
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = GA_025_075@solution[1,1])[1:6])
+    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = GA_075_075@solution[1,1])[1:6])
 
-    colnames(optimize_process) <- c("fish","HCR","scenario","m","RC_long")
+    colnames(optimized_process) <- c("fish","HCR","scenario","m","RC_long")
   }
 
   if(rule == "YY_rule"){
     colnames(optimized_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","alpha_YY","beta_YY")
-    optimized_result[,9:11] <- c(0.8, 1 ,1)
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, Btarget = GA_oneway@solution[1,1], alpha_YY = GA_oneway@solution[1,2], beta_YY = GA_oneway@solution[1,3])[1:6])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, Btarget = GA_rollercoaster@solution[1,1], alpha_YY = GA_rollercoaster@solution[1,2], beta_YY = GA_rollercoaster@solution[1,3]))[1:6]
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = GA_075_025@solution[1,1], alpha_YY = GA_075_025@solution[1,2], beta_YY = GA_075_025@solution[1,3]))[1:6]
+    optimized_result[,9:(8+para_numb)] <- matrix(c(0.8, 1 ,1),nrow = 22,ncol = para_numb,byrow = TRUE)
+    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, Btarget = GA_oneway@solution[1,1], alpha_YY = GA_oneway@solution[1,2], beta_YY = GA_oneway@solution[1,3])[1:6])
+    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, Btarget = GA_rollercoaster@solution[1,1], alpha_YY = GA_rollercoaster@solution[1,2], beta_YY = GA_rollercoaster@solution[1,3]))[1:6]
+    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = GA_025_025@solution[1,1], alpha_YY = GA_025_025@solution[1,2], beta_YY = GA_025_025@solution[1,3]))[1:6]
     optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, Btarget = GA_05_025@solution[1,1], alpha_YY = GA_05_025@solution[1,2], beta_YY = GA_05_025@solution[1,3]))[1:6]
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = GA_025_025@solution[1,1], alpha_YY = GA_025_025@solution[1,2], beta_YY = GA_025_025@solution[1,3]))[1:6]
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = GA_075_05@solution[1,1], alpha_YY = GA_075_05@solution[1,2], beta_YY = GA_075_05@solution[1,3]))[1:6]
+    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = GA_075_025@solution[1,1], alpha_YY = GA_075_025@solution[1,2], beta_YY = GA_075_025@solution[1,3]))[1:6]
+    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = GA_025_05@solution[1,1], alpha_YY = GA_025_05@solution[1,2], beta_YY = GA_025_05@solution[1,3]))[1:6]
     optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, Btarget = GA_05_05@solution[1,1], alpha_YY = GA_05_05@solution[1,2], beta_YY = GA_05_05@solution[1,3]))[1:6]
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = GA_025_05@solution[1,1], alpha_YY = GA_025_05@solution[1,2], beta_YY = GA_025_05@solution[1,3]))[1:6]
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = GA_075_075@solution[1,1], alpha_YY = GA_075_075@solution[1,2], beta_YY = GA_075_075@solution[1,3]))[1:6]
+    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = GA_075_05@solution[1,1], alpha_YY = GA_075_05@solution[1,2], beta_YY = GA_075_05@solution[1,3]))[1:6]
+    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = GA_025_075@solution[1,1], alpha_YY = GA_025_075@solution[1,2], beta_YY = GA_025_075@solution[1,3]))[1:6]
     optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, Btarget = GA_05_075@solution[1,1], alpha_YY = GA_05_075@solution[1,2], beta_YY = GA_05_075@solution[1,3]))[1:6]
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = GA_025_075@solution[1,1], alpha_YY = GA_025_075@solution[1,2], beta_YY = GA_025_075@solution[1,3]))[1:6]
+    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = GA_075_075@solution[1,1], alpha_YY = GA_075_075@solution[1,2], beta_YY = GA_075_075@solution[1,3]))[1:6]
 
-    colnames(optimize_process) <- c("fish","HCR","scenario","Btarget","alpha_YY","beta_YY","RC_long")
+    colnames(optimized_process) <- c("fish","HCR","scenario","Btarget","alpha_YY","beta_YY","RC_long")
   }
 
   optimized_result[12,9:(8+para_numb)] <- GA_oneway@solution[1,]
   optimized_result[13,9:(8+para_numb)] <- GA_rollercoaster@solution[1,]
-  optimized_result[14,9:(8+para_numb)] <- GA_075_025@solution[1,]
+  optimized_result[14,9:(8+para_numb)] <- GA_025_025@solution[1,]
   optimized_result[15,9:(8+para_numb)] <- GA_05_025@solution[1,]
-  optimized_result[16,9:(8+para_numb)] <- GA_025_025@solution[1,]
-  optimized_result[17,9:(8+para_numb)] <- GA_075_05@solution[1,]
+  optimized_result[16,9:(8+para_numb)] <- GA_075_025@solution[1,]
+  optimized_result[17,9:(8+para_numb)] <- GA_025_05@solution[1,]
   optimized_result[18,9:(8+para_numb)] <- GA_05_05@solution[1,]
-  optimized_result[19,9:(8+para_numb)] <- GA_025_05@solution[1,]
-  optimized_result[20,9:(8+para_numb)] <- GA_075_075@solution[1,]
+  optimized_result[19,9:(8+para_numb)] <- GA_075_05@solution[1,]
+  optimized_result[20,9:(8+para_numb)] <- GA_025_075@solution[1,]
   optimized_result[21,9:(8+para_numb)] <- GA_05_075@solution[1,]
-  optimized_result[22,9:(8+para_numb)] <- GA_025_075@solution[1,]
+  optimized_result[22,9:(8+para_numb)] <- GA_075_075@solution[1,]
   write.csv(optimized_result, paste0("optimized_result_", rule,"_",parameters$fish,".csv"))
 
-  optimize_process <- rbind(cbind(parameters$fish,rule,"one-way",matrix(unlist(GA_oneway@bestSol),length(GA_oneway@bestSol),para_numb,byrow = TRUE),GA_oneway@summary[,1]-10),
-                            cbind(parameters$fish,rule,"roller-coaster",matrix(unlist(GA_rollercoaster@bestSol),length(GA_rollercoaster@bestSol),para_numb,byrow = TRUE),GA_rollercoaster@summary[,1]-10),
-                            cbind(parameters$fish,rule,"075_025",matrix(unlist(GA_075_025@bestSol),length(GA_075_025@bestSol),para_numb,byrow = TRUE),GA_075_025@summary[,1]-10),
-                            cbind(parameters$fish,rule,"05_025",matrix(unlist(GA_05_025@bestSol),length(GA_05_025@bestSol),para_numb,byrow = TRUE),GA_05_025@summary[,1]-10),
-                            cbind(parameters$fish,rule,"025_025",matrix(unlist(GA_025_025@bestSol),length(GA_025_025@bestSol),para_numb,byrow = TRUE),GA_025_025@summary[,1]-10),
-                            cbind(parameters$fish,rule,"075_05",matrix(unlist(GA_075_05@bestSol),length(GA_075_05@bestSol),para_numb,byrow = TRUE),GA_075_05@summary[,1]-10),
-                            cbind(parameters$fish,rule,"05_05",matrix(unlist(GA_05_05@bestSol),length(GA_05_05@bestSol),para_numb,byrow = TRUE),GA_05_05@summary[,1]-10),
-                            cbind(parameters$fish,rule,"025_05",matrix(unlist(GA_025_05@bestSol),length(GA_025_05@bestSol),para_numb,byrow = TRUE),GA_025_05@summary[,1]-10),
-                            cbind(parameters$fish,rule,"075_075",matrix(unlist(GA_075_075@bestSol),length(GA_075_075@bestSol),para_numb,byrow = TRUE),GA_075_075@summary[,1]-10),
-                            cbind(parameters$fish,rule,"05_075",matrix(unlist(GA_05_075@bestSol),length(GA_05_075@bestSol),para_numb,byrow = TRUE),GA_05_075@summary[,1]-10),
-                            cbind(parameters$fish,rule,"025_075",matrix(unlist(GA_025_075@bestSol),length(GA_025_075@bestSol),para_numb,byrow = TRUE),GA_025_075@summary[,1]-10))
-  write.csv(optimize_process,paste0("optimize_process_", rule, "_", parameters$fish, ".csv"))
+  write.csv(optimized_process,paste0("optimize_process_", rule, "_", parameters$fish, ".csv"))
+  saveRDS(optimized_result,paste0("optimized_result_", rule,"_",parameters$fish,".RDS"))
+  saveRDS(optimized_process,paste0("optimized_process_", rule,"_",parameters$fish,".RDS"))
 }
 
 func <- function(parameters = stock_parameters(fish_data),
                  GA,
                  custom,
                  scenario_organization, # "ICES" or "Japan"
-                 scenario, # "one-way" or "roller-coaster"
+                 scenario, # "one_way" or "roller_coaster"
                  start, # 0.75 or 0.5 or 0.25
                  end, # 0.75 or 0.5 or 0.25
                  rule,
@@ -2366,8 +2364,8 @@ func <- function(parameters = stock_parameters(fish_data),
                  beta_YY = 1){
 
   if(is.null(GA)){
-    MSE_oneway <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0)
-    MSE_rollercoaster <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0)
+    MSE_oneway <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0)
+    MSE_rollercoaster <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0)
     MSE_confusion <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "confusion", start = 0, end = 0)
 
     MSE_output <- tibble(MSE_oneway = MSE_oneway,
@@ -2417,6 +2415,483 @@ Generation_Time <- function(parameters){
   G <- sum(age*L*maa)/sum(L*maa)
 
   return(G)
+}
+
+ParetoMonitor <- function(obj){
+  if (max(obj@fitness) > 0) {  # 適応度が10を超えたら終了
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+Pareto_optimum <- function(parameters,
+                           optimize,
+                           scenario_organization, # "ICES" or "Japan"
+                           scenario, # "one_way" or "roller_coaster"
+                           start, # 0.75 or 0.5 or 0.25
+                           end, # 0.75 or 0.5 or 0.25
+                           rule = "type2_rule",
+                           Btarget = 0.8,
+                           Blimit = 0.7,
+                           delta1 = 0.5,
+                           delta2 = 0.4,
+                           delta3 = 0.4,
+                           m = 0,
+                           tau = 0.4,
+                           theta = 0.75,
+                           wSB
+){
+  ver_stk <- parameters$ver_stk;waa <- parameters$waa;alpha <- parameters$alpha;beta <- parameters$beta;L_inf <- parameters$L_inf;k_von <- parameters$k_von
+  na <- parameters$na;ver_stk <- parameters$ver_stk;saa <- parameters$saa;maa <- parameters$maa;M <- parameters$M
+  laa <- parameters$laa;S2 <- parameters$S2
+  MSY <- parameters$MSY;Bmsy <- parameters$Bmsy;SBmsy <- parameters$SBmsy;Fmsy <- parameters$Fmsy;Fcrash <- parameters$Fcrash;B0 <- parameters$B0
+
+  probs <- age_length <- matrix(0,na,5)
+  for(i in 1:na){
+    age_length[i,] <- floor(seq(laa[i]-2, laa[i]+2, by=1))
+    probs[i,] <- dnorm(age_length[i,], laa[i], 0.2)
+    probs[i,] <- probs[i,]/(sum(probs[i,]))
+  }
+  # 年数と初期資源量はシナリオによって違うので注意
+  # various stock biomass and catch trajectories simulation
+  ### according to the value of k, select the management tool
+  naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
+  SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
+
+  Btarget <- Btarget; Blimit <- Blimit; delta1 <- delta1; delta2 <- delta2; delta3 <- delta3; tau <- tau; theta <- theta; m <- m; wSB <- wSB
+  if(scenario_organization == "ICES"){
+    ny_0.5Fmsy <- 75 # year for management to converge in equivalent
+    ny_history <- 25 # year for management to converge in equivalent
+    ny_before <- ny_0.5Fmsy+ny_history # years before management
+    F_initial <- rep(0.5*Fmsy,75)
+    if(scenario == "one_way"){
+      f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
+      rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
+      F_history <- rate ^ (seq(0, length(scen_period)))*f0
+      F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
+    }else if(scenario == "roller_coaster"){
+      f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
+      F_history <- rep(NA, length(years))
+      rateup <- log(fmax/f0)/9
+      fup <- (f0*exp(-rateup))*exp((1:10)*rateup)
+      lfup <- length(fup)
+      F_history[1:lfup] <- fup
+
+      # at the top
+      F_history[lfup:(lfup+5)] <- fup[lfup]
+
+      # coming down!
+      ratedo <- log(Fmsy/fmax)/9
+      lfdo <- length(F_history) - (lfup +6) + 1
+      fdo <- (fmax*exp(-ratedo))*exp((1:10)*ratedo)
+      F_history[(lfup+6):length(F_history)] <- fdo[1:lfdo]
+      F <- c(F_initial,F_history) %>% matrix(ny_before,sim)
+    }
+
+    # the number of ages are "i", years are "t", the number of scenario is "k" [i,t,k]
+    naa[,1,] <- rep(ver_stk,sim)
+    for(k in 1:sim){
+      for(i in 1:ny_before){faa[,i,k] <- F[i,k]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
+    }
+    ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+    SBt[1,] <- colSums(ssb[,1,])
+    caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+    colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+    for (t in 2:ny_before){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+      ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+      SBt[t,] <- colSums(ssb[,t,])
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+    }
+    wcaa = caa*waa; baa = naa*waa
+  }
+
+  if(scenario_organization == "Japan"){
+    ny_before <- 25
+    # calculate the fishing mortality before management
+    naa_F <- ssb_F <- matrix(0,na,(ny_before+1))
+    SBt_F <- c() # sum of the weight of spawning stock biomass
+
+    # biomass in plan
+    naa_F[,1] <- B0*start/(sum(waa))
+    ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
+    SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
+    colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
+    scenario <- paste0(start,"_",end)
+
+    # calculate fishing mortality and catch in t=1
+    F_cal <- function(F){
+      for (t in 2:(ny_before+1)) {
+        naa_F[1,t] <- (alpha*SBt_F[t-1]/(beta+SBt_F[t-1])) # Beverton-Holt type reproductive function
+        naa_F[2:(na-1),t] <- naa_F[1:(na-2),t-1]*exp(-F*saa[1:(na-2)]-M[1:(na-2)])
+        naa_F[na,t] <- naa_F[na-1,t-1]*exp(-F*saa[na-1]-M[na-1]) + naa_F[na,t-1]*exp(-F*saa[na]-M[na])
+        SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
+      }
+      end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
+      return(abs(B0*end-end_biomass))
+    }
+    # 管理前シナリオで実行するFを計算
+    F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
+
+
+    # various stock biomass and catch trajectories simulation
+    # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
+    naa[,1,] <- rep(B0*start/(sum(waa)),sim)
+    faa[,1:ny_before,] <- rep(F_before_management,sim)
+    ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+    SBt[1,] <- colSums(ssb[,1,])
+    caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+    colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+    for (t in 2:ny_before){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+      ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+      SBt[t,] <- colSums(ssb[,t,])
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+    }
+    wcaa = caa*waa; baa = naa*waa
+  }
+
+  ny_after <- 30
+  ny <- ny_before+ny_after
+  naa <- naa[,1:ny,];caa <- caa[,1:ny,];wcaa <- wcaa[,1:ny,];faa <- faa[,1:ny,];baa <- baa[,1:ny,];ssb <- ssb[,1:ny,]
+  SBt <- SBt[1:ny,];iaa <- iaa[1:ny,];iaa_obs <- iaa_obs[1:ny,];Catch <- Catch[1:ny,]
+  epsiron_i <- epsiron_i[1:ny,];epsiron_r <- epsiron_r[1:ny,]
+
+  # HCRに使うデータを集める期間
+  ny_reference <- 24
+  Linf <- L_inf*epsiron_l[1:ny,] # L_inf is the mean length, Linf is the varied L_inf in every year
+  iaa <- apply(S2*naa*waa,2:3,sum)
+  iaa_obs <- iaa*exp(epsiron_i-0.5*sd_i^2)
+  Catch <- apply(wcaa,2:3,sum)
+  ABC <- Catch
+
+  all_sim_frequency_data <- lc <- L_mean <- LF_M <- as.list(1:sim)
+  r <- f <- b <- matrix(0,ny_after,sim)
+  pooled_frequency_data <- matrix(0,5*na*ny,3)
+  colnames(pooled_frequency_data) <- c("year","length", "numbers")
+  pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
+  pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
+
+  for(k in 1:sim){
+    for(t in 1:ny_before){
+      numbers <- as.vector(t(caa[,t,k]*probs))
+      pooled_frequency_data[(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+    }
+    all_sim_frequency_data[[k]] <- as.data.frame(pooled_frequency_data)
+    lc[[k]] <- Lc(all_sim_frequency_data[[k]], pool = (ny_before-4):ny_before) # Lc is derived from the data in 96-100 years
+    L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value # 1-100 years L_mean data
+    LF_M[[k]] <- theta*lc[[k]]@value+(1-theta)*Linf[,k]
+  }
+  Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # 1.4*Iloss (Iloss is the minimum biomass index)
+
+  # ここからrfbルール
+  if(rule == "rfb_rule"){
+    for(t in (ny_before+1):ny){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+      r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+      f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+      b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+      b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+      Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+      Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                           Catch[t, ],
+                           pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
+      F_cal <- function(F_beta, t, k){
+        Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+        return(abs(Catch_plan - Catch[t,k]))
+      }
+
+      # kの全ての要素に対してoptimize関数を適用
+      faa[,t,] <- apply(array(1:sim), 1, function(k) {
+        optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+      })
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+      for(k in 1:sim){
+        numbers <- as.vector(t(caa[,t,k]*probs))
+        all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+      }
+      ssb[,t,] <- naa[,t,]*maa*waa
+      SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+      iaa[t,] <- colSums(S2*naa[,t,]*waa)
+      iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+    }
+    wcaa <- waa*caa; baa <- waa*naa
+  }
+
+  # ここから2系ルール
+  if(rule == "type2_rule"){
+    for(t in (ny_before+1):ny){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+      r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+      f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+      b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+      b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+      for(k in 1:sim){
+        data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+        ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
+      }
+      Catch[t,] <- ABC[t,]
+
+      ### Catch[t]を与えてくれるようなF[t]を求める関数
+      F_cal <- function(F_beta, t, k){
+        Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+        return(abs(Catch_plan - ABC[t,k]))
+      }
+
+      # kの全ての要素に対してoptimize関数を適用
+      faa[,t,] <- apply(array(1:sim), 1, function(k) {
+        optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+      })
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+      for(k in 1:sim){
+        numbers <- as.vector(t(caa[,t,k]*probs))
+        all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+      }
+      ssb[,t,] <- naa[,t,]*maa*waa
+      SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+      iaa[t,] <- colSums(S2*naa[,t,]*waa)
+      iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+    }
+    wcaa <- waa*caa; baa <- waa*naa
+  }
+
+  # ここからrfbルール+平均漁獲量
+  if(rule == "ICES_average"){
+    for(t in (ny_before+1):ny){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+      r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+      f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+      b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+      b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+      Catch[t,] <- colMeans(Catch[(t-6):(t-2),])*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+      Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                           Catch[t, ],
+                           pmin(1.2 * colMeans(Catch[(t-6):(t-2),]),pmax(Catch[t,],0.7*colMeans(Catch[(t-6):(t-2),]))))
+      F_cal <- function(F_beta, t, k){
+        Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+        return(abs(Catch_plan - Catch[t,k]))
+      }
+
+      # kの全ての要素に対してoptimize関数を適用
+      faa[,t,] <- apply(array(1:sim), 1, function(k) {
+        optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+      })
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+      for(k in 1:sim){
+        numbers <- as.vector(t(caa[,t,k]*probs))
+        all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+      }
+      ssb[,t,] <- naa[,t,]*maa*waa
+      SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+      iaa[t,] <- colSums(S2*naa[,t,]*waa)
+      iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+    }
+    wcaa <- waa*caa; baa <- waa*naa
+  }
+
+  # ここから2系ルール+体長データ
+  if(rule == "type2_rule_length"){
+    for(t in (ny_before+1):ny){
+      naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+      naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+      naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+      r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+      f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+      b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+      b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+      for(k in 1:sim){
+        data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+        ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
+      }
+      Catch[t,] <- f[t-ny_before,]*ABC[t,]
+      F_cal <- function(F_beta, t, k){
+        Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+        return(abs(Catch_plan - Catch[t,k]))
+      }
+
+      # kの全ての要素に対してoptimize関数を適用
+      faa[,t,] <- apply(array(1:sim), 1, function(k) {
+        optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+      })
+      caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+      for(k in 1:sim){
+        numbers <- as.vector(t(caa[,t,k]*probs))
+        all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+      }
+      ssb[,t,] <- naa[,t,]*maa*waa
+      SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+      iaa[t,] <- colSums(S2*naa[,t,]*waa)
+      iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+    }
+    wcaa <- waa*caa; baa <- waa*naa
+  }
+
+  RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+  RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+  RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+  RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+  AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+               ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+  Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+  # optimize = NULL: 最後にパフォーマンスをまとめる
+  if(is.null(optimize)){
+    result_rule <- list(RSB_long = RSB_long,
+                        RC_long = RC_long,
+                        Blim_risk = Blim_risk,
+                        Btarget = Btarget,
+                        Blimit = Blimit,
+                        delta1 = delta1,
+                        delta2 = delta2,
+                        delta3 = delta3,
+                        wSB = wSB)
+    #optimize = 1: パラメータの最適化を実行
+  }else{
+    if(Blim_risk <= 0.95){
+      RC_long <- -1000
+    }
+    result_rule <- RC_long+wSB*RSB_long
+  }
+  return(result_rule)
+}
+
+Pareto_func <- function(parameters) {
+  for (i in 1:11) { # シナリオ
+    for (j in 1:length(omomi)) { # 重み
+      result <- GA_Pareto(parameters, scenario_organization = setting[i,1], scenario = setting[i,2], start = setting[i,3], end = setting[i,4], rule, wSB = omomi[j])
+      progress <- Pareto_optimum(parameters,
+                                 optimize = NULL,
+                                 scenario_organization = setting[i,1],
+                                 scenario = setting[i,2],
+                                 start = setting[i,3],
+                                 end = setting[i,4],
+                                 rule = rule,
+                                 Btarget = result@solution[1,1],
+                                 Blimit = result@solution[1,2],
+                                 delta1 = result@solution[1,3],
+                                 delta2 = result@solution[1,4],
+                                 delta3 = result@solution[1,5],
+                                 wSB = omomi[j])
+      scenario_progress[length(omomi)*(i-1)+j,1:9] <- unlist(progress)
+      scenario_progress[length(omomi)*(i-1)+j,10] <- setting[i,5]
+
+      # 条件をチェックして続行するか中断するかを決定
+      if (progress$RSB_long < 0.5 || progress$RC_long < 0.5){
+        break
+      }}}
+  return(scenario_progress)
+}
+
+candidate_rule <- function(parameters,rule){
+
+  if(rule == "type2_rule"){
+    para_numb <- 5
+
+    default_candidate <- matrix(NA,22,(8+para_numb))
+    default_candidate[,1] <- c(rep("origin",11),rep("optimized",11))
+    default_candidate[,2] <- rep(c("one_way","roller_coaster","025_025","05_025","075_025","025_05","05_05","075_05","025_075","05_075","075_075"),2)
+
+    default_candidate[1,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule)[18:23])
+    default_candidate[2,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule)[18:23])
+    default_candidate[3,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
+    default_candidate[4,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)[18:23])
+    default_candidate[5,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
+    default_candidate[6,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
+    default_candidate[7,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)[18:23])
+    default_candidate[8,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
+    default_candidate[9,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
+    default_candidate[10,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)[18:23])
+    default_candidate[11,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
+
+    colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
+    default_candidate[,9:(8+para_numb)] <- matrix(c(0.8,0.7,0.5,0.4,0.4),nrow = 22,ncol = para_numb,byrow = TRUE)
+    default_candidate[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, Btarget = 0.7, Blimit = 0.7, delta1 = 0.8, delta2 = 0.4, delta3 = 0.4)[1:6])
+    default_candidate[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, Btarget = 0.7, Blimit = 0.7, delta1 = 0.8, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = 0.7, Blimit = 0.7, delta1 = 0.8, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, Btarget = 0.7, Blimit = 0.7, delta1 = 0.8, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = 0.7, Blimit = 0.7, delta1 = 0.8, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = 0.5, Blimit = 0.7, delta1 = 0.5, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, Btarget = 0.5, Blimit = 0.7, delta1 = 0.5, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = 0.5, Blimit = 0.7, delta1 = 0.5, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = 0.3, Blimit = 0.7, delta1 = 0.3, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, Btarget = 0.3, Blimit = 0.7, delta1 = 0.3, delta2 = 0.4, delta3 = 0.4))[1:6]
+    default_candidate[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = 0.3, Blimit = 0.7, delta1 = 0.3, delta2 = 0.4, delta3 = 0.4))[1:6]
+
+    default_candidate[12:22,9:(8+para_numb)] <- cbind(c(rep(0.7,5),rep(0.5,3),rep(0.3,3)),rep(0.7,11),c(rep(0.8,5),rep(0.5,3),rep(0.3,3)),rep(0.4,11),rep(0.4,11))
+  }
+
+  if(rule == "rfb_rule"){
+    para_numb <- 3
+    if(parameters$k_von < 0.2){
+      m_default <- 0.95
+    }else if(0.2 <= parameters$k_von & parameters$k_von < 0.32){
+      m_default <- 0.9
+    }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
+      m_default <- 0.5
+    }
+
+    default_candidate <- matrix(NA,22,(8+para_numb))
+    default_candidate[,1] <- c(rep("origin",11),rep("optimized",11))
+    default_candidate[,2] <- rep(c("one_way","roller_coaster","025_025","05_025","075_025","025_05","05_05","075_05","025_075","05_075","075_075"),2)
+
+    default_candidate[1,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule)[18:23])
+    default_candidate[2,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule)[18:23])
+    default_candidate[3,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
+    default_candidate[4,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)[18:23])
+    default_candidate[5,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
+    default_candidate[6,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
+    default_candidate[7,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)[18:23])
+    default_candidate[8,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
+    default_candidate[9,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
+    default_candidate[10,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)[18:23])
+    default_candidate[11,3:8] <- unlist(scenario_and_management(parameters, GA = 1, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
+
+    colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
+    default_candidate[,9:(8+para_numb)] <- matrix(c(m_default,0.4,0.75),nrow = 22,ncol = para_numb,byrow = TRUE)
+    default_candidate[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0, rule, m = m_default, tau = 0.5, theta = 0.75))[1:6]
+    default_candidate[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0, rule, m = m_default, tau = 0.5, theta = 0.75))[1:6]
+    default_candidate[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = m_default, tau = 0.5, theta = 0.75))[1:6]
+    default_candidate[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, m = m_default, tau = 0.5, theta = 0.75))[1:6]
+    default_candidate[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = m_default, tau = 0.5, theta = 0.75))[1:6]
+    default_candidate[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = m_default, tau = 0.3, theta = 0.75))[1:6]
+    default_candidate[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, m = m_default, tau = 0.3, theta = 0.75))[1:6]
+    default_candidate[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = m_default, tau = 0.3, theta = 0.75))[1:6]
+    default_candidate[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = m_default, tau = 0.2, theta = 0.75))[1:6]
+    default_candidate[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, m = m_default, tau = 0.2, theta = 0.75))[1:6]
+    default_candidate[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = m_default, tau = 0.2, theta = 0.75))[1:6]
+
+    default_candidate[12:22,9:(8+para_numb)] <- cbind(rep(m_default,11),c(rep(0.5,5),rep(0.3,3),rep(0.2,3)),rep(0.75,11))
+  }
+
+  write.csv(default_candidate,paste0("default_candidate_", rule, "_", parameters$fish, ".csv"))
 }
 
 ## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
