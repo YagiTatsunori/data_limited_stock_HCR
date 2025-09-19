@@ -8,7 +8,7 @@ library(frasyr23)
 library(ggplot2)
 library(remotes)
 library(cat3advice)
-source("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_error/functions.R")
+source("functions.R")
 
 t95 = 1 # steepness of maturity curve
 avar = 5 # the start and finish the maturing before and after a50
@@ -24,7 +24,8 @@ sim = 100 # https://academic.oup.com/icesjms/article/78/4/1311/6161236 と https
 set.seed(3);epsiron_i <- rnorm(130*sim,0,sd_i) %>% matrix(130,sim,byrow = TRUE)
 set.seed(4);epsiron_r <- rnorm(130*sim,0,sd_r) %>% matrix(130,sim,byrow = TRUE)
 set.seed(5);epsiron_l <- rlnorm(130*sim,0,sd_l) %>% matrix(130,sim)
-popsize <- 50;maxiter <- 20;run <- 10
+# runは目的関数が改善しない場合、何世代計算を繰り返すかを指定。３くらいで良いのでは？
+popsize <- 50;maxiter <- 20;run <- 3
 
 setting <- data.frame(
   V1 = c("ICES", "ICES", "Japan", "Japan", "Japan", "Japan", "Japan", "Japan", "Japan", "Japan", "Japan"),
@@ -55,6 +56,8 @@ for(i in 1:na){
 naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
 SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
 
+### gaのparallel機能、使うとエラーが出るということでしたが、こちらでは使えるような？
+
 results_anchovy <- func(parameters = parameters,
                         GA = 1,
                         custom = NULL,
@@ -71,3 +74,19 @@ results_anchovy <- func(parameters = parameters,
                         m = 0,
                         tau = 0.4,
                         theta = 0.75)
+
+# scenario_and_managementだけ実行してみる
+Rprof("log.txt") # Rprof: なんの関数が実行されているかを調べる
+# system.time # 計算時間のカウント
+aa <- system.time(scenario_and_management(parameters, GA = 1, custom = 1, 
+        "ICES", "one_way", start, end, "type2_rule", Btarget = 0.8, 
+        Blimit = 0.1, delta1 = 0.5, delta2 = 0.4, delta3 = 0.4))
+Rprof(NULL) # 調べ終わり
+aa # かかった時間　→　３５秒くらいかかる
+bb <- summaryRprof("log.txt") # その内訳 => Lmeanに３０秒くらい費やしている
+
+## ２系ルールではLmean, Lcの計算は必ずしも必要ないので、たとえば２系ルールでその部分をコメントアウトすると計算時間は５秒に短縮される
+## rfbルールを用いるときでも、必要な年だけ計算してもよいのかも
+## Lmeanの中でも、tidyverse系の関数が時間をとっているので、もっと計算時間が早い簡易的な関数を自分で書いてもよいかと（S4やtidyverseは生のRよりも遅いとおもいます）
+
+
