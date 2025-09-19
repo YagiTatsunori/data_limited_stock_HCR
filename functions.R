@@ -12,6 +12,7 @@ stock_parameters <- function(fish_data){
   alpha = fish_data$alpha # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
   beta = fish_data$beta
   F_initial = fish_data$F_initial
+  yr = 100
 
   # calculation for stock parameters from given parameters
   laa <- (waa/a)^(1/b) # average length for each age
@@ -35,17 +36,17 @@ stock_parameters <- function(fish_data){
   S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
   ver_stk <- 10/sum(waa) # initial stock biomass for each age
 
-  naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,100)
+  naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,yr)
   SBt <- c() # sum of the weight of spawning stock biomass
   naa[,1] <- ver_stk
-  set.seed(1);F <- epsiron_F*F_initial # fishing mortality in every year
+  F <- rep(F_initial,yr) # fishing mortality in every year
   ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
   SBt[1] <- sum(ssb[,1], na.rm = T)
-  for(i in 1:100){faa[,i] <- F[i]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
+  for(i in 1:yr){faa[,i] <- F[i]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
   caa[,1] <- naa[,1]*(1-exp(-faa[,1]))*exp(-M/2)
-  colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:100
+  colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:yr
 
-  for (t in 2:100) {
+  for (t in 2:yr) {
     naa[1,t] <- (alpha*SBt[t-1]/(beta+SBt[t-1])) # Beverton-Holt type reproductive function
     naa[2,t] <- naa[1,t-1]*exp(-faa[1,t-1]-M[1])
     for(s in 3:(na-1)){
@@ -66,7 +67,7 @@ stock_parameters <- function(fish_data){
 
   ################################################################################
   ############# deriving reference points with "FLR"
-  slot <- rep("landings.n",na*100);age <- rep(c(1:na),100);year <- sort(rep(c(1:100),na));data <- as.vector(data_for_RP$caa);units <- rep('100 million',na*100)
+  slot <- rep("landings.n",na*yr);age <- rep(c(1:na),yr);year <- sort(rep(c(1:yr),na));data <- as.vector(data_for_RP$caa);units <- rep('100 million',na*yr)
   data_landn <- data.frame(slot,age,year,data,units)
   landn <- subset(data_landn, slot=="landings.n", select=-slot)
   landsn <- as.FLQuant(landn)
@@ -82,8 +83,8 @@ stock_parameters <- function(fish_data){
   harvest(stock_data) <- as.vector(data_for_RP$faa)
   catch.n(stock_data) <- landings.n(stock_data)
   stock.n(stock_data) <- as.vector(data_for_RP$naa)
-  discards.n(stock_data) <- rep(0,100)
-  stock.wt(stock_data) <- catch.wt(stock_data) <- landings.wt(stock_data) <- discards.wt(stock_data) <- rep(waa,100)
+  discards.n(stock_data) <- rep(0,yr)
+  stock.wt(stock_data) <- catch.wt(stock_data) <- landings.wt(stock_data) <- discards.wt(stock_data) <- rep(waa,yr)
   landings(stock_data) <- computeLandings(stock_data)
   discards(stock_data) <- computeDiscards(stock_data)
   catch(stock_data) <- computeCatch(stock_data)
@@ -204,18 +205,11 @@ plot_MSE <- function(sim_result,parameters){
   plot_res(simulation_result_b[simulation_result_b$year >= 1,], "b", 1, 1, paste0(sim_result[[17]],"_",sim_result[[15]],"_",sim_result[[16]], "_b.jpg"))
 }
 
-customMonitor <- function(obj) {
-  if (max(obj@fitness) > 10) {  # 適応度が10を超えたら終了
-    return(TRUE)
-  }
-  return(FALSE)
-}
-
 scenario_and_management <- function(parameters,
                                     GA,
                                     custom,
                                     scenario_organization, # "ICES" or "Japan"
-                                    scenario, # "one-way" or "roller-coaster"
+                                    scenario, # "one_way" or "roller_coaster"
                                     start, # 0.75 or 0.5 or 0.25
                                     end, # 0.75 or 0.5 or 0.25
                                     rule,
@@ -228,842 +222,1040 @@ scenario_and_management <- function(parameters,
                                     tau = 0.4,
                                     theta = 0.75
 ){
-  ver_stk <- parameters$ver_stk;waa <- parameters$waa;alpha <- parameters$alpha;beta <- parameters$beta;L_inf <- parameters$L_inf;k_von <- parameters$k_von
-  na <- parameters$na;ver_stk <- parameters$ver_stk;saa <- parameters$saa;maa <- parameters$maa;M <- parameters$M
-  laa <- parameters$laa;S2 <- parameters$S2
-  MSY <- parameters$MSY;Bmsy <- parameters$Bmsy;SBmsy <- parameters$SBmsy;Fmsy <- parameters$Fmsy;Fcrash <- parameters$Fcrash;B0 <- parameters$B0
+  # custom=NULL: パラメータはデフォルト
+  if(is.null(custom)){
+    Btarget <- 0.8; Blimit <- 0.7; delta1 <- 0.5; delta2 <- 0.4; delta3 <- 0.4; tau <- 0.4; theta <- 0.75
+    if(k_von < 0.2){
+      m <- 0.95
+    }else if(0.2 <= k_von & k_von < 0.32){
+      m <- 0.9
+    }else if(0.32 <= k_von & k_von <= 0.45){
+      m <- 0.5
+    }
 
-  probs <- age_length <- matrix(0,na,5)
-  for(i in 1:na){
-    age_length[i,] <- floor(seq(laa[i]-2, laa[i]+2, by=1))
-    probs[i,] <- dnorm(age_length[i,], laa[i], 0.2)
-    probs[i,] <- probs[i,]/(sum(probs[i,]))
-  }
-  # 年数と初期資源量はシナリオによって違うので注意
-  # various stock biomass and catch trajectories simulation
+    # custom=GA=NULL:普通にシミュレーション
+    if(is.null(GA)){
+      if(scenario_organization == "ICES"){
+        ny_0.5Fmsy <- 75 # year for management to converge in equivalent
+        ny_history <- 25 # year for management to converge in equivalent
+        ny_before <- ny_0.5Fmsy+ny_history # years before management
+        F_initial <- rep(0.5*Fmsy,75)
+        if(scenario == "one_way"){
+          f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
+          rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
+          F_history <- rate ^ (seq(0, length(scen_period)))*f0
+          F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
+        }else if(scenario == "roller_coaster"){
+          f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
+          F_history <- rep(NA, length(years))
+          rateup <- log(fmax/f0)/9
+          fup <- (f0*exp(-rateup))*exp((1:10)*rateup)
+          lfup <- length(fup)
+          F_history[1:lfup] <- fup
 
-  # 普通にシミュレーション
-  if(is.null(GA)){
+          # at the top
+          F_history[lfup:(lfup+5)] <- fup[lfup]
 
-    ### according to the value of k, select the management tool
-    if(is.null(custom)){
-      Btarget <- 0.8; Blimit <- 0.7; delta1 <- 0.5; delta2 <- 0.4; delta3 <- 0.4; tau <- 0.4; theta <- 0.75
-      if(k_von < 0.2){
-        m <- 0.95
-      }else if(0.2 <= k_von & k_von < 0.32){
-        m <- 0.9
-      }else if(0.32 <= k_von & k_von <= 0.45){
-        m <- 0.5
+          # coming down!
+          ratedo <- log(Fmsy/fmax)/9
+          lfdo <- length(F_history) - (lfup +6) + 1
+          fdo <- (fmax*exp(-ratedo))*exp((1:10)*ratedo)
+          F_history[(lfup+6):length(F_history)] <- fdo[1:lfdo]
+          F <- c(F_initial,F_history) %>% matrix(ny_before,sim)
+        }
+
+        # the number of ages are "i", years are "t", the number of scenario is "k" [i,t,k]
+        naa[,1,] <- rep(ver_stk,sim)
+        for(k in 1:sim){
+          for(i in 1:ny_before){faa[,i,k] <- F[i,k]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
+        }
+        ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+        SBt[1,] <- colSums(ssb[,1,])
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+        for (t in 2:ny_before){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+          ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+          SBt[t,] <- colSums(ssb[,t,])
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+        }
+        wcaa = caa*waa; baa = naa*waa
       }
+
+      if(scenario_organization == "Japan"){
+        start_end_cal <- function(start, end){
+          ny_before <- 25
+          # calculate the fishing mortality before management
+          naa_F <- ssb_F <- matrix(0,na,(ny_before+1))
+          SBt_F <- rep(0,(ny_before+1)) # sum of the weight of spawning stock biomass
+
+          # calculate fishing mortality and catch in t=1
+          F_cal <- function(F){
+            for (t in 2:(ny_before+1)) {
+              naa_F[1,t] <- (alpha*SBt_F[t-1]/(beta+SBt_F[t-1])) # Beverton-Holt type reproductive function
+              naa_F[2:(na-1),t] <- naa_F[1:(na-2),t-1]*exp(-F*saa[1:(na-2)]-M[1:(na-2)])
+              naa_F[na,t] <- naa_F[na-1,t-1]*exp(-F*saa[na-1]-M[na-1]) + naa_F[na,t-1]*exp(-F*saa[na]-M[na])
+              SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
+            }
+            end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
+            return(abs(B0*end-end_biomass))
+          }
+
+          naa_F[,1] <- B0*start/(sum(waa))
+          ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
+          SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
+          colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
+          scenario <- "confusion"
+
+          F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
+          return(F_before_management)
+        }
+        ## function for calculate Japan scenarios
+
+        ny_before <- 25
+        faa[,1:ny_before,1:(sim/9)] <- start_end_cal(0.75,0.25);faa[,1:ny_before,(1+(sim/9)):(2*(sim/9))] <- start_end_cal(0.5,0.25);faa[,1:ny_before,(1+2*(sim/9)):(3*(sim/9))] <- start_end_cal(0.25,0.25)
+        faa[,1:ny_before,(1+3*(sim/9)):(4*(sim/9))] <- start_end_cal(0.75,0.5);faa[,1:ny_before,(1+4*(sim/9)):(5*(sim/9))] <- start_end_cal(0.5,0.5);faa[,1:ny_before,(1+5*(sim/9)):(6*(sim/9))] <- start_end_cal(0.25,0.5)
+        faa[,1:ny_before,(1+6*(sim/9)):(7*(sim/9))] <- start_end_cal(0.75,0.75);faa[,1:ny_before,(1+7*(sim/9)):(8*(sim/9))] <- start_end_cal(0.5,0.75);faa[,1:ny_before,(1+8*(sim/9)):(9*(sim/9))] <- start_end_cal(0.25,0.75)
+
+        # various stock biomass and catch trajectories simulation
+        # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
+        naa[,1,] <- rep(rep(B0*c(0.75,0.5,0.25)/(sum(waa)),each=sim/9),3)
+        ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+        SBt[1,] <- colSums(ssb[,1,])
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+        for (t in 2:ny_before){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+          ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+          SBt[t,] <- colSums(ssb[,t,])
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+        }
+        wcaa = caa*waa; baa = naa*waa
+      }
+
+      ny_after <- 30
+      ny <- ny_before+ny_after
+      naa <- naa[,1:ny,];caa <- caa[,1:ny,];wcaa <- wcaa[,1:ny,];faa <- faa[,1:ny,];baa <- baa[,1:ny,];ssb <- ssb[,1:ny,]
+      SBt <- SBt[1:ny,];iaa <- iaa[1:ny,];iaa_obs <- iaa_obs[1:ny,];Catch <- Catch[1:ny,]
+      epsiron_i <- epsiron_i[1:ny,];epsiron_r <- epsiron_r[1:ny,]
+
+      # HCRに使うデータを集める期間
+      ny_reference <- 24
+      Linf <- L_inf*epsiron_l[1:ny,] # L_inf is the mean length, Linf is the varied L_inf in every year
+      iaa <- apply(S2*naa*waa,2:3,sum)
+      iaa_obs <- iaa*exp(epsiron_i-0.5*sd_i^2)
+      Catch <- apply(wcaa,2:3,sum)
+      ABC <- Catch
+
+      all_sim_frequency_data <- lc <- L_mean <- LF_M <- as.list(1:sim)
+      r <- f <- b <- matrix(0,ny_after,sim)
+      pooled_frequency_data <- matrix(0,5*na*ny,3)
+      colnames(pooled_frequency_data) <- c("year","length", "numbers")
+      pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
+      pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
+      for(k in 1:sim){
+        for(t in 1:ny_before){
+          numbers <- as.vector(t(caa[,t,k]*probs))
+          pooled_frequency_data[(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        }
+        all_sim_frequency_data[[k]] <- as.data.frame(pooled_frequency_data)
+        lc[[k]] <- Lc(all_sim_frequency_data[[k]], pool = (ny_before-4):ny_before) # Lc is derived from the data in 96-100 years
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value # 1-100 years L_mean data
+        LF_M[[k]] <- theta*lc[[k]]@value+(1-theta)*Linf[,k]
+      }
+      Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # 1.4*Iloss (Iloss is the minimum biomass index)
+
+      # ここからrfbルール
+      if(rule == "rfb_rule"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean,'[',t-2)/sapply(LF_M,'[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before,] < 1,
+                               Catch[t,],
+                               pmin(1.2*Catch[t-2,],pmax(Catch[t,],0.7*Catch[t-2,])))
+          F_cal <- function(F_beta,t,k){
+            Catch_plan <- sum(naa[,t,k]*(1-exp(-F_beta*Fmsy*saa))*exp(-M/2)*waa)
+            return(abs(Catch_plan-Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim),1,function(k){
+            optimize(F_cal,interval = c(0,10),t = t,k = k)$minimum*Fmsy*saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum,na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "rfb_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここからchrルール
+      if(rule == "chr_rule"){
+        f_proxy <- rep(0,sim)
+        list1 <- lapply(L_mean, function(x) x[1:100]);list2 <- lapply(LF_M, function(x) x[1:100])
+        year_U <- lapply(mapply(function(x, y) x / y, list1, list2, SIMPLIFY = FALSE), function(x) which(x >= 1))
+        for(k in 1:sim){
+          f_proxy[k] <- sum(Catch[year_U[[k]],k]/iaa_obs[year_U[[k]],k])/length(year_U[[k]])
+        }
+
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- iaa_obs[t-2,]*f_proxy*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                               Catch[t, ],
+                               pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
+
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "chr_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここから2系ルール
+      if(rule == "type2_rule"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          for(k in 1:sim){
+            data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+            ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
+          }
+          Catch[t,] <- ABC[t,]
+
+          ### Catch[t]を与えてくれるようなF[t]を求める関数
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - ABC[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs, # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after), # years
+                            scenario = scenario,
+                            method = "type2_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここからICESで平均漁獲量を使うHCR
+      if(rule == "ICES_average"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- colMeans(Catch[(t-6):(t-2),])*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                               Catch[t, ],
+                               pmin(1.2 * colMeans(Catch[(t-6):(t-2),]),pmax(Catch[t,],0.7*colMeans(Catch[(t-6):(t-2),]))))
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "average_catch",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここから2系ルールで体長データ使用
+      if(rule == "type2_rule_length"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          for(k in 1:sim){
+            data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+            ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=0.8, PL=0.7, PB=0, tune.par=c(0.5,0.4,0.4))$ABC # 2年前までのデータを使用
+          }
+          Catch[t,] <- f[t-ny_before,]*ABC[t,]
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs, # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after), # years
+                            scenario = scenario,
+                            method = "type2_length",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      return(result_rule)
+
+      #custom=NULL,GA=1:オリジナルのパラメータを代入して１１通りのシミュレーション
     }else{
-      Btarget <- Btarget; Blimit <- Blimit; delta1 <- delta1; delta2 <- delta2; delta3 <- delta3; tau <- tau; theta <- theta; m <- m
+      if(scenario_organization == "ICES"){
+        ny_0.5Fmsy <- 75 # year for management to converge in equivalent
+        ny_history <- 25 # year for management to converge in equivalent
+        ny_before <- ny_0.5Fmsy+ny_history # years before management
+        F_initial <- rep(0.5*Fmsy,75)
+        if(scenario == "one_way"){
+          f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
+          rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
+          F_history <- rate ^ (seq(0, length(scen_period)))*f0
+          F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
+        }else if(scenario == "roller_coaster"){
+          f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
+          F_history <- rep(NA, length(years))
+          rateup <- log(fmax/f0)/9
+          fup <- (f0*exp(-rateup))*exp((1:10)*rateup)
+          lfup <- length(fup)
+          F_history[1:lfup] <- fup
+
+          # at the top
+          F_history[lfup:(lfup+5)] <- fup[lfup]
+
+          # coming down!
+          ratedo <- log(Fmsy/fmax)/9
+          lfdo <- length(F_history) - (lfup +6) + 1
+          fdo <- (fmax*exp(-ratedo))*exp((1:10)*ratedo)
+          F_history[(lfup+6):length(F_history)] <- fdo[1:lfdo]
+          F <- c(F_initial,F_history) %>% matrix(ny_before,sim)
+        }
+
+        # the number of ages are "i", years are "t", the number of scenario is "k" [i,t,k]
+        naa[,1,] <- rep(ver_stk,sim)
+        for(k in 1:sim){
+          for(i in 1:ny_before){faa[,i,k] <- F[i,k]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
+        }
+        ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+        SBt[1,] <- colSums(ssb[,1,])
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+        for (t in 2:ny_before){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+          ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+          SBt[t,] <- colSums(ssb[,t,])
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+        }
+        wcaa = caa*waa; baa = naa*waa
+      }
+
+      if(scenario_organization == "Japan"){
+        ny_before <- 25
+        # calculate the fishing mortality before management
+        naa_F <- ssb_F <- matrix(0,na,(ny_before+1))
+        SBt_F <- c() # sum of the weight of spawning stock biomass
+
+        # biomass in plan
+        naa_F[,1] <- B0*start/(sum(waa))
+        ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
+        SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
+        colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
+        scenario <- paste0(start,"_",end)
+
+        # calculate fishing mortality and catch in t=1
+        F_cal <- function(F){
+          for (t in 2:(ny_before+1)) {
+            naa_F[1,t] <- (alpha*SBt_F[t-1]/(beta+SBt_F[t-1])) # Beverton-Holt type reproductive function
+            naa_F[2:(na-1),t] <- naa_F[1:(na-2),t-1]*exp(-F*saa[1:(na-2)]-M[1:(na-2)])
+            naa_F[na,t] <- naa_F[na-1,t-1]*exp(-F*saa[na-1]-M[na-1]) + naa_F[na,t-1]*exp(-F*saa[na]-M[na])
+            SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
+          }
+          end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
+          return(abs(B0*end-end_biomass))
+        }
+        # 管理前シナリオで実行するFを計算
+        F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
+
+
+        # various stock biomass and catch trajectories simulation
+        # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
+        naa[,1,] <- rep(B0*start/(sum(waa)),sim)
+        faa[,1:ny_before,] <- rep(F_before_management,sim)
+        ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
+        SBt[1,] <- colSums(ssb[,1,])
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
+
+        for (t in 2:ny_before){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+          ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
+          SBt[t,] <- colSums(ssb[,t,])
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+        }
+        wcaa = caa*waa; baa = naa*waa
+      }
+
+      ny_after <- 30
+      ny <- ny_before+ny_after
+      naa <- naa[,1:ny,];caa <- caa[,1:ny,];wcaa <- wcaa[,1:ny,];faa <- faa[,1:ny,];baa <- baa[,1:ny,];ssb <- ssb[,1:ny,]
+      SBt <- SBt[1:ny,];iaa <- iaa[1:ny,];iaa_obs <- iaa_obs[1:ny,];Catch <- Catch[1:ny,]
+      epsiron_i <- epsiron_i[1:ny,];epsiron_r <- epsiron_r[1:ny,]
+
+      # HCRに使うデータを集める期間
+      ny_reference <- 24
+      Linf <- L_inf*epsiron_l[1:ny,] # L_inf is the mean length, Linf is the varied L_inf in every year
+      iaa <- apply(S2*naa*waa,2:3,sum)
+      iaa_obs <- iaa*exp(epsiron_i-0.5*sd_i^2)
+      Catch <- apply(wcaa,2:3,sum)
+      ABC <- Catch
+
+      all_sim_frequency_data <- lc <- L_mean <- LF_M <- as.list(1:sim)
+      r <- f <- b <- matrix(0,ny_after,sim)
+      pooled_frequency_data <- matrix(0,5*na*ny,3)
+      colnames(pooled_frequency_data) <- c("year","length", "numbers")
+      pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
+      pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
+      for(k in 1:sim){
+        for(t in 1:ny_before){
+          numbers <- as.vector(t(caa[,t,k]*probs))
+          pooled_frequency_data[(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+        }
+        all_sim_frequency_data[[k]] <- as.data.frame(pooled_frequency_data)
+        lc[[k]] <- Lc(all_sim_frequency_data[[k]], pool = (ny_before-4):ny_before) # Lc is derived from the data in 96-100 years
+        L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value # 1-100 years L_mean data
+        LF_M[[k]] <- theta*lc[[k]]@value+(1-theta)*Linf[,k]
+      }
+      Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # 1.4*Iloss (Iloss is the minimum biomass index)
+
+      # ここからrfbルール
+      if(rule == "rfb_rule"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                               Catch[t, ],
+                               pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "rfb_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここから2系ルール
+      if(rule == "type2_rule"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          for(k in 1:sim){
+            data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+            ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
+          }
+          Catch[t,] <- ABC[t,]
+
+          ### Catch[t]を与えてくれるようなF[t]を求める関数
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - ABC[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs, # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after), # years
+                            scenario = scenario,
+                            method = "type2_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここからrfbルール+平均漁獲量
+      if(rule == "ICES_average"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- colMeans(Catch[(t-6):(t-2),])*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                               Catch[t, ],
+                               pmin(1.2 * colMeans(Catch[(t-6):(t-2),]),pmax(Catch[t,],0.7*colMeans(Catch[(t-6):(t-2),]))))
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "average_catch",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここから2系ルール+体長データ
+      if(rule == "type2_rule_length"){
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          for(k in 1:sim){
+            data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
+            ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
+          }
+          Catch[t,] <- f[t-ny_before,]*ABC[t,]
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs, # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after), # years
+                            scenario = scenario,
+                            method = "type2_length",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      # ここからchrルール
+      if(rule == "chr_rule"){
+        f_proxy <- rep(0,sim)
+        list1 <- lapply(L_mean, function(x) x[1:100]);list2 <- lapply(LF_M, function(x) x[1:100])
+        year_U <- lapply(mapply(function(x, y) x / y, list1, list2, SIMPLIFY = FALSE), function(x) which(x >= 1))
+        for(k in 1:sim){
+          f_proxy[k] <- sum(Catch[year_U[[k]],k]/iaa_obs[year_U[[k]],k])/length(year_U[[k]])
+        }
+
+        for(t in (ny_before+1):ny){
+          naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+          naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+          naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+          r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+          f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+          b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+          b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+          Catch[t,] <- iaa_obs[t-2,]*f_proxy*b[t-ny_before,]*m
+          Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                               Catch[t, ],
+                               pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
+
+          F_cal <- function(F_beta, t, k){
+            Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+            return(abs(Catch_plan - Catch[t,k]))
+          }
+
+          # kの全ての要素に対してoptimize関数を適用
+          faa[,t,] <- apply(array(1:sim), 1, function(k) {
+            optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+          })
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+          for(k in 1:sim){
+            numbers <- as.vector(t(caa[,t,k]*probs))
+            all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+            L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+          }
+          ssb[,t,] <- naa[,t,]*maa*waa
+          SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+          iaa[t,] <- colSums(S2*naa[,t,]*waa)
+          iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+        }
+        wcaa <- waa*caa; baa <- waa*naa
+        RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+        RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+        RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+        AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                     ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+        Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+        result_rule <- list(naa = naa,   # number of stock
+                            wcaa = wcaa, # weight of catch
+                            ssb = ssb,   # spawning stock biomass
+                            caa = caa,   # number of catch
+                            faa = faa,   # fishing mortality
+                            baa = baa,   # weight of stock biomass
+                            iaa_obs = iaa_obs,          # biomass index
+                            U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
+                            r = r,
+                            f = f,
+                            b = b,
+                            ny_before = ny_before,
+                            ny_after = ny_after,
+                            year = 1:(ny_before+ny_after),   # years
+                            scenario = scenario,
+                            method = "chr_rule",
+                            fish = parameters$fish,
+                            RSB_short = RSB_short,
+                            RC_short = RC_short,
+                            RSB_long = RSB_long,
+                            RC_long = RC_long,
+                            AAV = AAV,
+                            Blim_risk = Blim_risk)
+      }
+
+      return(result_rule)
     }
 
-    naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
-    SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
-
+    # custom=1:HCR中のパラメータはデフォルトではない
+  }else if(custom==1){
+    Btarget <- Btarget; Blimit <- Blimit; delta1 <- delta1; delta2 <- delta2; delta3 <- delta3; tau <- tau; theta <- theta; m <- m
     if(scenario_organization == "ICES"){
       ny_0.5Fmsy <- 75 # year for management to converge in equivalent
       ny_history <- 25 # year for management to converge in equivalent
       ny_before <- ny_0.5Fmsy+ny_history # years before management
       F_initial <- rep(0.5*Fmsy,75)
-      if(scenario == "one-way"){
+      if(scenario == "one_way"){
         f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
         rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
         F_history <- rate ^ (seq(0, length(scen_period)))*f0
         F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
-      }else if(scenario == "roller-coaster"){
-        f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
-        F_history <- rep(NA, length(years))
-        rateup <- log(fmax/f0)/9
-        fup <- (f0*exp(-rateup))*exp((1:10)*rateup)
-        lfup <- length(fup)
-        F_history[1:lfup] <- fup
-
-        # at the top
-        F_history[lfup:(lfup+5)] <- fup[lfup]
-
-        # coming down!
-        ratedo <- log(Fmsy/fmax)/9
-        lfdo <- length(F_history) - (lfup +6) + 1
-        fdo <- (fmax*exp(-ratedo))*exp((1:10)*ratedo)
-        F_history[(lfup+6):length(F_history)] <- fdo[1:lfdo]
-        F <- c(F_initial,F_history) %>% matrix(ny_before,sim)
-      }
-
-      # the number of ages are "i", years are "t", the number of scenario is "k" [i,t,k]
-      naa[,1,] <- rep(ver_stk,sim)
-      for(k in 1:sim){
-        for(i in 1:ny_before){faa[,i,k] <- F[i,k]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
-      }
-      ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
-      SBt[1,] <- colSums(ssb[,1,])
-      caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
-      colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
-
-      for (t in 2:ny_before){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-        ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
-        SBt[t,] <- colSums(ssb[,t,])
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-      }
-      wcaa = caa*waa; baa = naa*waa
-    }
-
-    if(scenario_organization == "Japan"){
-      ny_before <- 25
-      # calculate the fishing mortality before management
-      naa_F <- ssb_F <- matrix(0,na,(ny_before+1))
-      SBt_F <- rep(0,(ny_before+1)) # sum of the weight of spawning stock biomass
-
-      # biomass in plan
-      naa_F[,1] <- B0*start/(sum(waa))
-      ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
-      SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
-      colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
-      scenario <- paste0(start,"_",end)
-
-      # calculate fishing mortality and catch in t=1
-      F_cal <- function(F){
-        for (t in 2:(ny_before+1)) {
-          naa_F[1,t] <- (alpha*SBt_F[t-1]/(beta+SBt_F[t-1])) # Beverton-Holt type reproductive function
-          naa_F[2:(na-1),t] <- naa_F[1:(na-2),t-1]*exp(-F*saa[1:(na-2)]-M[1:(na-2)])
-          naa_F[na,t] <- naa_F[na-1,t-1]*exp(-F*saa[na-1]-M[na-1]) + naa_F[na,t-1]*exp(-F*saa[na]-M[na])
-          SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
-        }
-        end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
-        return(abs(B0*end-end_biomass))
-      }
-      # 管理前シナリオで実行するFを計算
-      F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
-
-
-      # various stock biomass and catch trajectories simulation
-      # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
-      naa[,1,] <- rep(B0*start/(sum(waa)),sim)
-      faa[,1:ny_before,] <- rep(F_before_management,sim)
-      ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
-      SBt[1,] <- colSums(ssb[,1,])
-      caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
-      colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
-
-      for (t in 2:ny_before){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[t-1,]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-        ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
-        SBt[t,] <- colSums(ssb[,t,])
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-      }
-      wcaa = caa*waa; baa = naa*waa
-    }
-
-    ny_after <- 30
-    ny <- ny_before+ny_after
-    naa <- naa[,1:ny,];caa <- caa[,1:ny,];wcaa <- wcaa[,1:ny,];faa <- faa[,1:ny,];baa <- baa[,1:ny,];ssb <- ssb[,1:ny,]
-    SBt <- SBt[1:ny,];iaa <- iaa[1:ny,];iaa_obs <- iaa_obs[1:ny,];Catch <- Catch[1:ny,]
-    epsiron_i <- epsiron_i[1:ny,];epsiron_r <- epsiron_r[1:ny,]
-
-    # HCRに使うデータを集める期間
-    ny_reference <- 24
-    Linf <- L_inf*epsiron_l[1:ny,] # L_inf is the mean length, Linf is the varied L_inf in every year
-    iaa <- apply(S2*naa*waa,2:3,sum)
-    iaa_obs <- iaa*exp(epsiron_i-0.5*sd_i^2)
-    Catch <- apply(wcaa,2:3,sum)
-    ABC <- Catch
-
-    all_sim_frequency_data <- lc <- L_mean <- LF_M <- as.list(1:sim)
-    r <- f <- b <- matrix(0,ny_after,sim)
-    pooled_frequency_data <- matrix(0,5*na*ny,3)
-    colnames(pooled_frequency_data) <- c("year","length", "numbers")
-    pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
-    pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
-    for(k in 1:sim){
-      for(t in 1:ny_before){
-        numbers <- as.vector(t(caa[,t,k]*probs))
-        pooled_frequency_data[(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-      }
-      all_sim_frequency_data[[k]] <- as.data.frame(pooled_frequency_data)
-      lc[[k]] <- Lc(all_sim_frequency_data[[k]], pool = (ny_before-4):ny_before) # Lc is derived from the data in 96-100 years
-      L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value # 1-100 years L_mean data
-      LF_M[[k]] <- theta*lc[[k]]@value+(1-theta)*Linf[,k]
-    }
-    Itrigger <- (1+tau)*(iaa_obs[(ny_before-ny_reference):ny_before,] %>% apply(2,min)) # (1+tau)*Iloss (Iloss is the minimum biomass index)
-
-    # ここからrfbルール
-    if(rule == "rfb_rule"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
-        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
-                             Catch[t, ],
-                             pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs,          # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after),   # years
-                          scenario = scenario,
-                          method = "rfb_rule",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここからchrルール
-    if(rule == "chr_rule"){
-      f_proxy <- rep(0,sim)
-      list1 <- lapply(L_mean, function(x) x[1:100]);list2 <- lapply(LF_M, function(x) x[1:100])
-      year_U <- lapply(mapply(function(x, y) x / y, list1, list2, SIMPLIFY = FALSE), function(x) which(x >= 1))
-      for(k in 1:sim){
-        f_proxy[k] <- sum(Catch[year_U[[k]],k]/iaa_obs[year_U[[k]],k])/length(year_U[[k]])
-      }
-
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        Catch[t,] <- iaa_obs[t-2,]*f_proxy*b[t-ny_before,]*m
-        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
-                             Catch[t, ],
-                             pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
-
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs,          # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after),   # years
-                          scenario = scenario,
-                          method = "chr_rule",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここから2系ルール
-    if(rule == "type2_rule"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        for(k in 1:sim){
-          data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
-          ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=Btarget, PL=Blimit, PB=0, tune.par=c(delta1,delta2,delta3))$ABC # 2年前までのデータを使用
-        }
-        Catch[t,] <- ABC[t,]
-
-        ### Catch[t]を与えてくれるようなF[t]を求める関数
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - ABC[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs, # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after), # years
-                          scenario = scenario,
-                          method = "type2_rule",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここからICESで平均漁獲量を使うHCR
-    if(rule == "ICES_average"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        Catch[t,] <- colMeans(Catch[(t-6):(t-2),])*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
-        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
-                             Catch[t, ],
-                             pmin(1.2 * colMeans(Catch[(t-6):(t-2),]),pmax(Catch[t,],0.7*colMeans(Catch[(t-6):(t-2),]))))
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs,          # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after),   # years
-                          scenario = scenario,
-                          method = "average_catch",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここから2系ルールで体長データ使用
-    if(rule == "type2_rule_length"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        for(k in 1:sim){
-          data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
-          ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=0.8, PL=0.7, PB=0, tune.par=c(0.5,0.4,0.4))$ABC # 2年前までのデータを使用
-        }
-        Catch[t,] <- f[t-ny_before,]*ABC[t,]
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs, # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after), # years
-                          scenario = scenario,
-                          method = "type2_length",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここからf_fix_1ルール
-    if(rule == "f_fix_1"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- 1 # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f[t-ny_before,]*b[t-ny_before,]*m
-        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
-                             Catch[t, ],
-                             pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs,          # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after),   # years
-                          scenario = scenario,
-                          method = "f_fix_1",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここかICES_target_CPUEルール
-    if(rule == "ICES_target_CPUE"){
-      f_alpha <- matrix(0,ny_after,sim)
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        for(k in 1:sim){
-          data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
-          f_alpha[t-ny_before,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=0.8, PL=0.7, PB=0, tune.par=c(0.5,0.4,0.4))$alpha # 2年前までのデータを使用
-        }
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        Catch[t,] <- Catch[t-2,]*r[t-ny_before,]*f_alpha[t-ny_before,]*b[t-ny_before,]*m
-        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
-                             Catch[t, ],
-                             pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - Catch[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs,          # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f_alpha,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after),   # years
-                          scenario = scenario,
-                          method = "ICES_target_CPUE",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここからtype2_06
-    if(rule == "type2_06"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        for(k in 1:sim){
-          data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
-          ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=0.6, PL=0.7, PB=0, tune.par=c(0.5,0.4,0.4))$ABC # 2年前までのデータを使用
-        }
-        Catch[t,] <- ABC[t,]
-
-        ### Catch[t]を与えてくれるようなF[t]を求める関数
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - ABC[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs, # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after), # years
-                          scenario = scenario,
-                          method = "type2_06",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # ここからtype2_07
-    if(rule == "type2_07"){
-      for(t in (ny_before+1):ny){
-        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
-        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
-        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
-
-        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
-        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
-        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
-        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
-
-        for(k in 1:sim){
-          data_input <- data.frame(year = (ny_before-ny_reference):(t-2), cpue = iaa_obs[(ny_before-ny_reference):(t-2),k], catch = Catch[(ny_before-ny_reference):(t-2),k])
-          ABC[t,k] <- calc_abc2(data_input, summary_abc = FALSE, BT=0.7, PL=0.7, PB=0, tune.par=c(0.5,0.4,0.4))$ABC # 2年前までのデータを使用
-        }
-        Catch[t,] <- ABC[t,]
-
-        ### Catch[t]を与えてくれるようなF[t]を求める関数
-        F_cal <- function(F_beta, t, k){
-          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
-          return(abs(Catch_plan - ABC[t,k]))
-        }
-
-        # kの全ての要素に対してoptimize関数を適用
-        faa[,t,] <- apply(array(1:sim), 1, function(k) {
-          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
-        })
-        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
-
-        for(k in 1:sim){
-          numbers <- as.vector(t(caa[,t,k]*probs))
-          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
-          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
-        }
-        ssb[,t,] <- naa[,t,]*maa*waa
-        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
-        iaa[t,] <- colSums(S2*naa[,t,]*waa)
-        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
-      }
-      wcaa <- waa*caa; baa <- waa*naa
-      RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
-      RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
-                   ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
-
-      result_rule <- list(naa = naa,   # number of stock
-                          wcaa = wcaa, # weight of catch
-                          ssb = ssb,   # spawning stock biomass
-                          caa = caa,   # number of catch
-                          faa = faa,   # fishing mortality
-                          baa = baa,   # weight of stock biomass
-                          iaa_obs = iaa_obs, # biomass index
-                          U = 100*apply(wcaa,2:3,sum)/apply(baa,2:3,sum),
-                          r = r,
-                          f = f,
-                          b = b,
-                          ny_before = ny_before,
-                          ny_after = ny_after,
-                          year = 1:(ny_before+ny_after), # years
-                          scenario = scenario,
-                          method = "type2_07",
-                          fish = parameters$fish,
-                          RSB_short = RSB_short,
-                          RC_short = RC_short,
-                          RSB_long = RSB_long,
-                          RC_long = RC_long,
-                          AAV = AAV,
-                          Blim_risk = Blim_risk)
-    }
-
-    # genetic algorithmで最適化
-  }else{
-    naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
-    SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
-
-    if(scenario_organization == "ICES"){
-      ny_0.5Fmsy <- 75 # year for management to converge in equivalent
-      ny_history <- 25 # year for management to converge in equivalent
-      ny_before <- ny_0.5Fmsy+ny_history # years before management
-      F_initial <- rep(0.5*Fmsy,75)
-      if(scenario == "one-way"){
-        f0 <- 0.5*Fmsy;fmax <- 0.8*Fcrash;scen_period <- (ny_before-24):ny_before
-        rate <- exp((log(fmax) - log(f0)) / (length(scen_period)))
-        F_history <- rate ^ (seq(0, length(scen_period)))*f0
-        F <- c(F_initial[-ny_0.5Fmsy],F_history) %>% matrix(ny_before,sim)
-      }else if(scenario == "roller-coaster"){
+      }else if(scenario == "roller_coaster"){
         f0 <- 0.5*Fmsy;fmax <- 0.75*Fcrash;years <- (ny_before-24):ny_before;up <- down <- 0.2
         F_history <- rep(NA, length(years))
         rateup <- log(fmax/f0)/9
@@ -1171,6 +1363,7 @@ scenario_and_management <- function(parameters,
     colnames(pooled_frequency_data) <- c("year","length", "numbers")
     pooled_frequency_data[,1] <- rep(1:ny, each = 5*na)
     pooled_frequency_data[,2] <- rep(as.vector(t(age_length)),ny)
+
     for(k in 1:sim){
       for(t in 1:ny_before){
         numbers <- as.vector(t(caa[,t,k]*probs))
@@ -1221,9 +1414,6 @@ scenario_and_management <- function(parameters,
         iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
       }
       wcaa <- waa*caa; baa <- waa*naa
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
     }
 
     # ここから2系ルール
@@ -1267,9 +1457,6 @@ scenario_and_management <- function(parameters,
         iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
       }
       wcaa <- waa*caa; baa <- waa*naa
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
     }
 
     # ここからrfbルール+平均漁獲量
@@ -1310,9 +1497,6 @@ scenario_and_management <- function(parameters,
         iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
       }
       wcaa <- waa*caa; baa <- waa*naa
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
     }
 
     # ここから2系ルール+体長データ
@@ -1354,22 +1538,108 @@ scenario_and_management <- function(parameters,
         iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
       }
       wcaa <- waa*caa; baa <- waa*naa
-      RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
-      RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
-      Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
     }
 
-    if (RSB_long >= 1) {
-      RC_long <- RC_long + 5
-    }
-    if (Blim_risk >= 0.95) {
-      RC_long <- RC_long + 5
-    }
-      result_rule <- RC_long
-  }
-  return(result_rule)
+    # ここからchrルール
+    if(rule == "chr_rule"){
+      f_proxy <- rep(0,sim)
+      list1 <- lapply(L_mean, function(x) x[1:100]);list2 <- lapply(LF_M, function(x) x[1:100])
+      year_U <- lapply(mapply(function(x, y) x / y, list1, list2, SIMPLIFY = FALSE), function(x) which(x >= 1))
+      for(k in 1:sim){
+        f_proxy[k] <- sum(Catch[year_U[[k]],k]/iaa_obs[year_U[[k]],k])/length(year_U[[k]])
+      }
 
-}
+      for(t in (ny_before+1):ny){
+        naa[1,t,] <- (alpha*SBt[t-1,]/(beta+SBt[t-1,]))*exp(epsiron_r[(t-ny_before),]-0.5*sd_r^2) # Beverton-Holt type reproductive function
+        naa[2:(na-1),t,] <- naa[1:(na-2),t-1,]*exp(-faa[1:(na-2),t-1,]-M[1:(na-2)])
+        naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
+
+        r[t-ny_before,] <- (iaa_obs[(t-3):(t-2),] %>% apply(2,mean))/(iaa_obs[(t-6):(t-4),] %>% apply(2,mean)) # biomass ratio (survey trend)
+        f[t-ny_before,] <- (sapply(L_mean, '[',t-2)/sapply(LF_M, '[',t-2)) # Fmsy proxy (1-100 years data for all sim-numbers)
+        b[t-ny_before,] <- iaa_obs[t-2,]/Itrigger
+        b[t-ny_before,][b[t-ny_before,] >= 1] <- 1 # biomass safeguard when the latest biomass index is less than Itrigger
+
+        Catch[t,] <- iaa_obs[t-2,]*f_proxy*b[t-ny_before,]*m
+        Catch[t, ] <- ifelse(b[t-ny_before, ] < 1,
+                             Catch[t, ],
+                             pmin(1.2 * Catch[t-2, ], pmax(Catch[t, ], 0.7 * Catch[t-2, ])))
+
+        F_cal <- function(F_beta, t, k){
+          Catch_plan <- sum(naa[,t,k] * (1 - exp(-F_beta * Fmsy * saa)) * exp(-M / 2) * waa)
+          return(abs(Catch_plan - Catch[t,k]))
+        }
+
+        # kの全ての要素に対してoptimize関数を適用
+        faa[,t,] <- apply(array(1:sim), 1, function(k) {
+          optimize(F_cal, interval = c(0, 10), t = t, k = k)$minimum * Fmsy * saa
+        })
+        caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+
+        for(k in 1:sim){
+          numbers <- as.vector(t(caa[,t,k]*probs))
+          all_sim_frequency_data[[k]][(t*5*na-(5*na-1)):(t*5*na),3] <- numbers
+          L_mean[[k]] <- Lmean(data = all_sim_frequency_data[[k]], Lc = lc[[k]])@value
+        }
+        ssb[,t,] <- naa[,t,]*maa*waa
+        SBt[t,] <- ssb[,t,] %>% apply(2,sum, na.rm = T)
+        iaa[t,] <- colSums(S2*naa[,t,]*waa)
+        iaa_obs[t,] <- iaa[t,]*exp(epsiron_i[t,]-0.5*sd_i^2)
+      }
+      wcaa <- waa*caa; baa <- waa*naa
+    }
+
+    fitness <- 0
+    RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
+    RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+    RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
+    RC_long <- (wcaa[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
+    AAV <- abs((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)-apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/
+                 ((apply(wcaa[,ny_before:(ny_before+30),],2:3,sum)+apply(wcaa[,(ny_before-1):((ny_before+30)-1),],2:3,sum))/2)) %>% apply(2,mean) %>% median()
+    Blim_risk <- ((ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum)) %>% apply(1, function(x) sum(x > 0.5*SBmsy)) %>% sum())/(sim*10)
+
+    # custom=1,GA=NULL:最適化で得られた解を代入したシミュレーション
+    if(is.null(GA)){
+      result_rule <- list(RSB_short = RSB_short,
+                          RC_short = RC_short,
+                          RSB_long = RSB_long,
+                          RC_long = RC_long,
+                          AAV = AAV,
+                          Blim_risk = Blim_risk,
+                          Btarget = Btarget,
+                          Blimit = Blimit,
+                          delta1 = delta1,
+                          delta2 = delta2,
+                          delta3 = delta3,
+                          m = m,
+                          tau = tau,
+                          theta = theta)
+      return(result_rule)
+
+      #custom=1,GA=1:パラメータの最適化を実行
+    }else{
+      if(RSB_long >= 1){
+        fitness <- RC_long+5
+      }
+      if(Blim_risk >= 0.95){
+        fitness <- fitness+5
+      }
+      result_rule <- list(fitness = fitness,
+                          RSB_short = RSB_short,
+                          RC_short = RC_short,
+                          RSB_long = RSB_long,
+                          RC_long = RC_long,
+                          AAV = AAV,
+                          Blim_risk = Blim_risk,
+                          Btarget = Btarget,
+                          Blimit = Blimit,
+                          delta1 = delta1,
+                          delta2 = delta2,
+                          delta3 = delta3,
+                          m = m,
+                          tau = tau,
+                          theta = theta)
+      return(result_rule)}
+  }}
 
 # MSEの設定と実行
 MSE_result <- function(parameters,
@@ -1385,7 +1655,7 @@ MSE_result <- function(parameters,
                                             GA,
                                             custom,
                                             scenario_organization, # "ICES" or "Japan"
-                                            scenario, # "one-way" or "roller-coaster"
+                                            scenario, # "one_way" or "roller_coaster"
                                             start, # 0.75 or 0.5 or 0.25
                                             end, # 0.75 or 0.5 or 0.25
                                             rule = "rfb_rule")
@@ -1393,7 +1663,7 @@ MSE_result <- function(parameters,
                                             GA,
                                             custom,
                                             scenario_organization, # "ICES" or "Japan"
-                                            scenario, # "one-way" or "roller-coaster"
+                                            scenario, # "one_way" or "roller_coaster"
                                             start, # 0.75 or 0.5 or 0.25
                                             end, # 0.75 or 0.5 or 0.25
                                             rule = "chr_rule")
@@ -1401,7 +1671,7 @@ MSE_result <- function(parameters,
                                               GA,
                                               custom,
                                               scenario_organization, # "ICES" or "Japan"
-                                              scenario, # "one-way" or "roller-coaster"
+                                              scenario, # "one_way" or "roller_coaster"
                                               start, # 0.75 or 0.5 or 0.25
                                               end, # 0.75 or 0.5 or 0.25
                                               rule = "type2_rule")
@@ -1409,7 +1679,7 @@ MSE_result <- function(parameters,
                                                      GA,
                                                      custom,
                                                      scenario_organization, # "ICES" or "Japan"
-                                                     scenario, # "one-way" or "roller-coaster"
+                                                     scenario, # "one_way" or "roller_coaster"
                                                      start, # 0.75 or 0.5 or 0.25
                                                      end, # 0.75 or 0.5 or 0.25
                                                      rule = "ICES_average")
@@ -1417,52 +1687,16 @@ MSE_result <- function(parameters,
                                                           GA,
                                                           custom,
                                                           scenario_organization, # "ICES" or "Japan"
-                                                          scenario, # "one-way" or "roller-coaster"
+                                                          scenario, # "one_way" or "roller_coaster"
                                                           start, # 0.75 or 0.5 or 0.25
                                                           end, # 0.75 or 0.5 or 0.25
                                                           rule = "type2_rule_length")
-  management_f_fix_1 <- scenario_and_management(parameters,
-                                                GA,
-                                                custom,
-                                                scenario_organization, # "ICES" or "Japan"
-                                                scenario, # "one-way" or "roller-coaster"
-                                                start, # 0.75 or 0.5 or 0.25
-                                                end, # 0.75 or 0.5 or 0.25
-                                                rule = "f_fix_1")
-  management_ICES_target_CPUE <- scenario_and_management(parameters,
-                                                         GA,
-                                                         custom,
-                                                         scenario_organization, # "ICES" or "Japan"
-                                                         scenario, # "one-way" or "roller-coaster"
-                                                         start, # 0.75 or 0.5 or 0.25
-                                                         end, # 0.75 or 0.5 or 0.25
-                                                         rule = "ICES_target_CPUE")
-  management_type2_06 <- scenario_and_management(parameters,
-                                                 GA,
-                                                 custom,
-                                                 scenario_organization, # "ICES" or "Japan"
-                                                 scenario, # "one-way" or "roller-coaster"
-                                                 start, # 0.75 or 0.5 or 0.25
-                                                 end, # 0.75 or 0.5 or 0.25
-                                                 rule = "type2_06")
-  management_type2_07 <- scenario_and_management(parameters,
-                                                 GA,
-                                                 custom,
-                                                 scenario_organization, # "ICES" or "Japan"
-                                                 scenario, # "one-way" or "roller-coaster"
-                                                 start, # 0.75 or 0.5 or 0.25
-                                                 end, # 0.75 or 0.5 or 0.25
-                                                 rule = "type2_07")
 
   output <- tibble(management_rfb = management_rfb,
                    management_chr = management_chr,
                    management_type2 = management_type2,
                    management_ICES_average = management_ICES_average,
-                   management_type2_rule_length = management_type2_rule_length,
-                   management_f_fix_1 = management_f_fix_1,
-                   management_ICES_target_CPUE = management_ICES_target_CPUE,
-                   management_type2_06 = management_type2_06,
-                   management_type2_07 = management_type2_07)
+                   management_type2_rule_length = management_type2_rule_length)
 }
 
 # パフォーマンス指標の計算
@@ -1500,208 +1734,289 @@ performance_MSE <- function(MSE_output,parameters){
 }
 
 # 遺伝的アルゴリズムで最適化をする関数
-GA_result <- function(parameters, scenario_organization, scenario, start, end, rule){
-  if(rule == "type2_rule" | rule == "type2_rule_length"){
+GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
+  history_df <- list()
+  generation_populations <- list()
+  custom_monitor <- function(obj){
+    generation <- obj@iter
+    population <- obj@population
+    fitness <- obj@fitness
 
-    initial_population <- matrix(runif(30*5, min = 0, max = 1), nrow = 30, ncol = 5)
-    specified_individuals <- matrix(rep(c(0.8, 0.7, 0.5, 0.4, 0.4), 20), nrow = 20, byrow = TRUE)
-    suggestions <- rbind(specified_individuals, initial_population)
-    suggestions <- as.data.frame(suggestions)
-    GA_HCR <- function(parameters, scenario_organization, scenario, start, end, rule){
-      ga(type = "real-valued",
-         fitness =  function(x) scenario_and_management(parameters,
-                                                        GA = 1,
-                                                        custom,
-                                                        scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
-                                                        start, # 0.75 or 0.5 or 0.25
-                                                        end, # 0.75 or 0.5 or 0.25
-                                                        rule,
-                                                        Btarget = x[1],
-                                                        Blimit = x[2],
-                                                        delta1 = x[3],
-                                                        delta2 = x[4],
-                                                        delta3 = x[5]),
-         lower = c(0,0,0,0,0), upper = c(1,1,1,1,1), suggestions = suggestions,
-         popSize = popsize, maxiter = maxiter, run = run,
-         parallel = TRUE, keepBest = TRUE, monitor = customMonitor, seed = 1)
+    # 個体を保存
+    generation_populations[[generation]] <<- population
+
+    # 進捗表示
+    cat("Generation:", generation, "Best fitness:", max(fitness), "\n")
+
+    # 適応度が10を超えたら終了
+    if (max(fitness) > 10){
+      return(TRUE)
     }
-
-    GA_oneway <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)
-    GA_rollercoaster <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)
-    GA_075_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)
-    GA_05_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)
-    GA_025_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)
-    GA_075_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)
-    GA_05_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)
-    GA_025_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)
-    GA_075_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)
-    GA_05_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)
-    GA_025_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)
-
-    optimized_result <- matrix(NA,22,13)
-    optimized_result[,9] <- 0.8;optimized_result[,10] <- 0.7
-    optimized_result[,11] <- 0.5;optimized_result[,12] <- 0.4;optimized_result[,13] <- 0.4
-    optimized_result[,1] <- c(rep("origin",11),rep("optimized",11))
-    optimized_result[,2] <- rep(c("one-way","roller-coaster","075_025","05_025","025_025","075_05","05_05","025_05","075_075","05_075","025_075"),2)
-
-    optimized_result[1,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)[18:23])
-    optimized_result[2,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)[18:23])
-    optimized_result[3,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
-    optimized_result[4,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)[18:23])
-    optimized_result[5,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
-    optimized_result[6,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
-    optimized_result[7,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)[18:23])
-    optimized_result[8,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
-    optimized_result[9,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
-    optimized_result[10,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)[18:23])
-    optimized_result[11,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, Btarget = GA_oneway@solution[1], Blimit = GA_oneway@solution[2], delta1 = GA_oneway@solution[3], delta2 = GA_oneway@solution[4], delta3 = GA_oneway@solution[5])[18:23])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, Btarget = GA_rollercoaster@solution[1], Blimit = GA_rollercoaster@solution[2], delta1 = GA_rollercoaster@solution[3], delta2 = GA_rollercoaster@solution[4], delta3 = GA_rollercoaster@solution[5])[18:23])
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, Btarget = GA_075_025@solution[1], Blimit = GA_075_025@solution[2], delta1 = GA_075_025@solution[3], delta2 = GA_075_025@solution[4], delta3 = GA_075_025@solution[5])[18:23])
-    optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, Btarget = GA_05_025@solution[1], Blimit = GA_05_025@solution[2], delta1 = GA_05_025@solution[3], delta2 = GA_05_025@solution[4], delta3 = GA_05_025@solution[5])[18:23])
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, Btarget = GA_025_025@solution[1], Blimit = GA_025_025@solution[2], delta1 = GA_025_025@solution[3], delta2 = GA_025_025@solution[4], delta3 = GA_025_025@solution[5])[18:23])
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, Btarget = GA_075_05@solution[1], Blimit = GA_075_05@solution[2], delta1 = GA_075_05@solution[3], delta2 = GA_075_05@solution[4], delta3 = GA_075_05@solution[5])[18:23])
-    optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, Btarget = GA_05_05@solution[1], Blimit = GA_05_05@solution[2], delta1 = GA_05_05@solution[3], delta2 = GA_05_05@solution[4], delta3 = GA_05_05@solution[5])[18:23])
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, Btarget = GA_025_05@solution[1], Blimit = GA_025_05@solution[2], delta1 = GA_025_05@solution[3], delta2 = GA_025_05@solution[4], delta3 = GA_025_05@solution[5])[18:23])
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, Btarget = GA_075_075@solution[1], Blimit = GA_075_075@solution[2], delta1 = GA_075_075@solution[3], delta2 = GA_075_075@solution[4], delta3 = GA_075_075@solution[5])[18:23])
-    optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, Btarget = GA_05_075@solution[1], Blimit = GA_05_075@solution[2], delta1 = GA_05_075@solution[3], delta2 = GA_05_075@solution[4], delta3 = GA_05_075@solution[5])[18:23])
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, Btarget = GA_025_075@solution[1], Blimit = GA_025_075@solution[2], delta1 = GA_025_075@solution[3], delta2 = GA_025_075@solution[4], delta3 = GA_025_075@solution[5])[18:23])
-
-    optimized_result[12,9:13] <- GA_oneway@solution[1:5]
-    optimized_result[13,9:13] <- GA_rollercoaster@solution[1:5]
-    optimized_result[14,9:13] <- GA_075_025@solution[1:5]
-    optimized_result[15,9:13] <- GA_05_025@solution[1:5]
-    optimized_result[16,9:13] <- GA_025_025@solution[1:5]
-    optimized_result[17,9:13] <- GA_075_05@solution[1:5]
-    optimized_result[18,9:13] <- GA_05_05@solution[1:5]
-    optimized_result[19,9:13] <- GA_025_05@solution[1:5]
-    optimized_result[20,9:13] <- GA_075_075@solution[1:5]
-    optimized_result[21,9:13] <- GA_05_075@solution[1:5]
-    optimized_result[22,9:13] <- GA_025_075@solution[1:5]
-    colnames(optimized_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
-    write.csv(optimized_result, paste0("optimized_result_", rule,"_",parameters$fish,".csv"))
-
-    optimize_process <- rbind(cbind(parameters$fish,rule,"one-way",matrix(unlist(GA_oneway@bestSol),length(GA_oneway@bestSol),5,byrow = TRUE),GA_oneway@summary[,1]-10),
-                              cbind(parameters$fish,rule,"rollercoaster",matrix(unlist(GA_rollercoaster@bestSol),length(GA_rollercoaster@bestSol),5,byrow = TRUE),GA_rollercoaster@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_025",matrix(unlist(GA_075_025@bestSol),length(GA_075_025@bestSol),5,byrow = TRUE),GA_075_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_025",matrix(unlist(GA_05_025@bestSol),length(GA_05_025@bestSol),5,byrow = TRUE),GA_05_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_025",matrix(unlist(GA_025_025@bestSol),length(GA_025_025@bestSol),5,byrow = TRUE),GA_025_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_05",matrix(unlist(GA_075_05@bestSol),length(GA_075_05@bestSol),5,byrow = TRUE),GA_075_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_05",matrix(unlist(GA_05_05@bestSol),length(GA_05_05@bestSol),5,byrow = TRUE),GA_05_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_05",matrix(unlist(GA_025_05@bestSol),length(GA_025_05@bestSol),5,byrow = TRUE),GA_025_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_075",matrix(unlist(GA_075_075@bestSol),length(GA_075_075@bestSol),5,byrow = TRUE),GA_075_075@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_075",matrix(unlist(GA_05_075@bestSol),length(GA_05_075@bestSol),5,byrow = TRUE),GA_05_075@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_075",matrix(unlist(GA_025_075@bestSol),length(GA_025_075@bestSol),5,byrow = TRUE),GA_025_075@summary[,1]-10))
-
-    colnames(optimize_process) <- c("fish","HCR","scenario","Btarget","Blimit","delta1","delta2","delta3","RC_long")
-write.csv(optimize_process,paste0("optimize_process_", rule, "_", parameters$fish, ".csv"))}
+    return(FALSE)
+  }
 
   if(rule == "rfb_rule" | rule == "ICES_average"){
+    para_numb <- 3
     if(parameters$k_von < 0.2){
-      m <- 0.95
+      m_default <- 0.95
     }else if(0.2 <= parameters$k_von & parameters$k_von < 0.32){
-      m <- 0.9
+      m_default <- 0.9
     }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
-      m <- 0.5
+      m_default <- 0.5
     }
-    initial_population <- matrix(runif(30*3, min = 0, max = 1), nrow = 30, ncol = 3)
-    specified_individuals <- matrix(rep(c(m, 0.4, 0.75), 20), nrow = 20, byrow = TRUE)
-    suggestions <- rbind(specified_individuals, initial_population)
-    suggestions <- as.data.frame(suggestions)
-    GA_HCR <- function(parameters, scenario_organization, scenario, start, end, rule){
+    set.seed(1);initial_population <- matrix(runif(popsize*0.6*para_numb,min = 0,max = 1),nrow = popsize*0.6,ncol = para_numb)
+    specified_individuals <- matrix(rep(c(m_default,0.4,0.75),popsize*0.4),nrow = popsize*0.4,byrow = TRUE)
+    suggestions <- rbind(specified_individuals,initial_population)
+
+    GA_HCR <- function(parameters,scenario_organization,scenario,start,end,rule){
+      # 実行ごとに履歴を初期化（グローバルに作る）
+      ga_history <<- list()
+      make_fitness <- function(parameters,scenario_organization,scenario,start,end,rule){
+        gen_counter <- 0L
+        ind_counter <- 0L
+
+        function(x){
+          ind_counter <<- ind_counter + 1L
+          if((ind_counter - 1L) %% popsize == 0L){
+            gen_counter <<- gen_counter + 1L
+          }
+          result <- scenario_and_management(parameters,
+                                            GA = 1,
+                                            custom = 1,
+                                            scenario_organization,
+                                            scenario,
+                                            start,
+                                            end,
+                                            rule,
+                                            m = x[1],
+                                            tau = x[2],
+                                            theta = x[3])
+
+          fitness <- result$fitness
+          record <- data.frame(scenario  = setting[i,5],
+                               RSB_short = result$RSB_short,
+                               RC_short  = result$RC_short,
+                               RSB_long  = result$RSB_long,
+                               RC_long   = result$RC_long,
+                               AAV       = result$AAV,
+                               Blim_risk = result$Blim_risk,
+                               m = x[1],
+                               tau = x[2],
+                               theta = x[3]
+          )
+          ga_history[[length(ga_history) + 1L]] <<- record
+          return(fitness)
+        }}
+
       ga(type = "real-valued",
-         fitness =  function(x) scenario_and_management(parameters,
-                                                        GA = 1,
-                                                        custom,
-                                                        scenario_organization, # "ICES" or "Japan"
-                                                        scenario, # "one-way" or "roller-coaster"
-                                                        start, # 0.75 or 0.5 or 0.25
-                                                        end, # 0.75 or 0.5 or 0.25
-                                                        rule,
-                                                        m = x[1],
-                                                        tau = x[2],
-                                                        theta = x[3]),
-         lower = c(0,0,0), upper = c(1,1,1), suggestions = suggestions,
-         popSize = popsize, maxiter = maxiter, run = run, parallel = TRUE, keepBest = TRUE, monitor = customMonitor, seed = 1)
+         fitness = make_fitness(parameters,scenario_organization,scenario,start,end,rule),
+         lower = rep(0,para_numb), upper = rep(1,para_numb),
+         suggestions = suggestions,popSize = popsize,maxiter = maxiter,run = run,
+         parallel = FALSE,keepBest = TRUE,monitor = custom_monitor,seed = 1234)}
+
+    history_list <- vector("list",nrow(setting))
+    for (i in 1:nrow(setting)){GA_result <- GA_HCR(parameters,
+                                                   scenario_organization = setting[i,1],
+                                                   scenario = setting[i,2],
+                                                   start    = setting[i,3],
+                                                   end      = setting[i,4],
+                                                   rule     = rule)
+    # GA_HCR 内で ga_history を更新している前提
+    history_df <- do.call(rbind,ga_history)
+
+    # 必要なら条件の識別子を付ける
+    history_list[[i]] <- history_df
     }
+    all_history <- do.call(rbind, history_list)
 
-    GA_oneway <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)
-    GA_rollercoaster <- GA_HCR(parameters, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)
-    GA_075_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)
-    GA_05_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)
-    GA_025_025 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)
-    GA_075_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)
-    GA_05_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)
-    GA_025_05 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)
-    GA_075_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)
-    GA_05_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)
-    GA_025_075 <- GA_HCR(parameters, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)
+    # performance and parameters of original
+    all_original_result <- sapply(1:nrow(setting),function(i){
+      filtered <- all_history[all_history == setting[i,5] &
+                                all_history$m == m_default & all_history$tau == 0.4 & all_history$theta == 0.75,]
+      max_RC <- max(filtered$RC_long)
+      original_result <- filtered[which(filtered$RC_long == max_RC)[1],]
+    }) %>% t()
+  }
 
-    optimized_result <- matrix(NA,22,11)
-    optimized_result[,9] <- 0.95;optimized_result[,10] <- 0.4;optimized_result[,11] <- 0.75
-    optimized_result[,1] <- c(rep("origin",11),rep("optimized",11))
-    optimized_result[,2] <- rep(c("one-way","roller-coaster","075_025","05_025","025_025","075_05","05_05","025_05","075_075","05_075","025_075"),2)
+  if(rule == "type2_rule" | rule == "type2_rule_length"){
+    para_numb <- 5
+    set.seed(1);initial_population <- matrix(runif(popsize*0.6*para_numb,min = 0,max = 1),nrow = popsize*0.6,ncol = para_numb)
+    specified_individuals <- matrix(rep(c(0.8,0.7,0.5,0.4,0.4),popsize*0.4),nrow = popsize*0.4,byrow = TRUE)
+    suggestions <- rbind(specified_individuals,initial_population)
 
-    optimized_result[1,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule)[18:23])
-    optimized_result[2,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule)[18:23])
-    optimized_result[3,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule)[18:23])
-    optimized_result[4,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule)[18:23])
-    optimized_result[5,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule)[18:23])
-    optimized_result[6,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule)[18:23])
-    optimized_result[7,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule)[18:23])
-    optimized_result[8,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule)[18:23])
-    optimized_result[9,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule)[18:23])
-    optimized_result[10,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule)[18:23])
-    optimized_result[11,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = NULL, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule)[18:23])
-    optimized_result[12,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[13,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[14,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[15,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[16,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[17,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[18,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[19,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[20,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[21,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
-    optimized_result[22,3:8] <- unlist(scenario_and_management(parameters, GA = NULL, custom = 1, scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75, rule, m = GA_05_025_rfb@solution[1], tau = GA_05_025_rfb@solution[2], theta = GA_05_025_rfb@solution[3])[18:23])
+    GA_HCR <- function(parameters,scenario_organization,scenario,start,end,rule){
+      # 実行ごとに履歴を初期化（グローバルに作る）
+      ga_history <<- list()
+      make_fitness <- function(parameters,scenario_organization,scenario,start,end,rule){
+        gen_counter <- 0L
+        ind_counter <- 0L
 
-    optimized_result[12,9:11] <- GA_oneway@solution[1:3]
-    optimized_result[13,9:11] <- GA_rollercoaster@solution[1:3]
-    optimized_result[14,9:11] <- GA_075_025@solution[1:3]
-    optimized_result[15,9:11] <- GA_05_025@solution[1:3]
-    optimized_result[16,9:11] <- GA_025_025@solution[1:3]
-    optimized_result[17,9:11] <- GA_075_05@solution[1:3]
-    optimized_result[18,9:11] <- GA_05_05@solution[1:3]
-    optimized_result[19,9:11] <- GA_025_05@solution[1:3]
-    optimized_result[20,9:11] <- GA_075_075@solution[1:3]
-    optimized_result[21,9:11] <- GA_05_075@solution[1:3]
-    optimized_result[22,9:11] <- GA_025_075@solution[1:3]
-    colnames(optimize_result) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
-    write.csv(optimized_result, paste0("optimized_result_", rule,"_",parameters$fish,".csv"))
+        function(x){
+          ind_counter <<- ind_counter + 1L
+          if((ind_counter - 1L) %% popsize == 0L){
+            gen_counter <<- gen_counter + 1L
+          }
+          result <- scenario_and_management(parameters,
+                                            GA = 1,
+                                            custom = 1,
+                                            scenario_organization,
+                                            scenario,
+                                            start,
+                                            end,
+                                            rule,
+                                            Btarget = x[1],
+                                            Blimit = x[2],
+                                            delta1 = x[3],
+                                            delta2 = x[4],
+                                            delta3 = x[5])
 
-    optimize_process <- rbind(cbind(parameters$fish,rule,"one-way",matrix(unlist(GA_oneway@bestSol),length(GA_oneway@bestSol),5,byrow = TRUE),GA_oneway@summary[,1]-10),
-                              cbind(parameters$fish,rule,"rollercoaster",matrix(unlist(GA_rollercoaster@bestSol),length(GA_rollercoaster@bestSol),5,byrow = TRUE),GA_rollercoaster@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_025",matrix(unlist(GA_075_025@bestSol),length(GA_075_025@bestSol),5,byrow = TRUE),GA_075_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_025",matrix(unlist(GA_05_025@bestSol),length(GA_05_025@bestSol),5,byrow = TRUE),GA_05_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_025",matrix(unlist(GA_025_025@bestSol),length(GA_025_025@bestSol),5,byrow = TRUE),GA_025_025@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_05",matrix(unlist(GA_075_05@bestSol),length(GA_075_05@bestSol),5,byrow = TRUE),GA_075_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_05",matrix(unlist(GA_05_05@bestSol),length(GA_05_05@bestSol),5,byrow = TRUE),GA_05_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_05",matrix(unlist(GA_025_05@bestSol),length(GA_025_05@bestSol),5,byrow = TRUE),GA_025_05@summary[,1]-10),
-                              cbind(parameters$fish,rule,"075_075",matrix(unlist(GA_075_075@bestSol),length(GA_075_075@bestSol),5,byrow = TRUE),GA_075_075@summary[,1]-10),
-                              cbind(parameters$fish,rule,"05_075",matrix(unlist(GA_05_075@bestSol),length(GA_05_075@bestSol),5,byrow = TRUE),GA_05_075@summary[,1]-10),
-                              cbind(parameters$fish,rule,"025_075",matrix(unlist(GA_025_075@bestSol),length(GA_025_075@bestSol),5,byrow = TRUE),GA_025_075@summary[,1]-10))
+          fitness <- result$fitness
+          record <- data.frame(scenario  = setting[i,5],
+                               RSB_short = result$RSB_short,
+                               RC_short  = result$RC_short,
+                               RSB_long  = result$RSB_long,
+                               RC_long   = result$RC_long,
+                               AAV       = result$AAV,
+                               Blim_risk = result$Blim_risk,
+                               Btarget = x[1],
+                               Blimit = x[2],
+                               delta1 = x[3],
+                               delta2 = x[4],
+                               delta3 = x[5]
+          )
+          ga_history[[length(ga_history) + 1L]] <<- record
+          return(fitness)
+        }}
 
-    colnames(optimize_process) <- c("fish","HCR","scenario","m","tau","theta","RC_long")
-    write.csv(optimize_process,paste0("optimize_process_", rule, "_", parameters$fish, ".csv"))
+      ga(type = "real-valued",
+         fitness = make_fitness(parameters,scenario_organization,scenario,start,end,rule),
+         lower = rep(0,para_numb), upper = rep(1,para_numb),
+         suggestions = suggestions,popSize = popsize,maxiter = maxiter,run = run,
+         parallel = FALSE,keepBest = TRUE,monitor = custom_monitor,seed = 1234)}
+
+    history_list <- vector("list",nrow(setting))
+    for (i in 1:nrow(setting)){GA_result <- GA_HCR(parameters,
+                                                   scenario_organization = setting[i,1],
+                                                   scenario = setting[i,2],
+                                                   start    = setting[i,3],
+                                                   end      = setting[i,4],
+                                                   rule     = rule)
+    # GA_HCR 内で ga_history を更新している前提
+    history_df <- do.call(rbind,ga_history)
+
+    # 必要なら条件の識別子を付ける
+    history_list[[i]] <- history_df
     }
+    all_history <- do.call(rbind, history_list)
+
+    # performance and parameters of original
+    all_original_result <- sapply(1:nrow(setting),function(i){
+      filtered <- all_history[all_history == setting[i,5] &
+                                all_history$Btarget == 0.8 & all_history$Blimit == 0.7 &
+                                all_history$delta1 == 0.5 & all_history$delta2 == 0.4 & all_history$delta3 == 0.4,]
+      max_RC <- max(filtered$RC_long)
+      original_result <- filtered[which(filtered$RC_long == max_RC)[1],]
+    }) %>% t()
+  }
+
+  if(rule == "chr_rule"){
+    para_numb <- 1
+    if(parameters$k_von < 0.2){
+      m_default <- 0.95
+    }else if(0.2 <= parameters$k_von & parameters$k_von < 0.32){
+      m_default <- 0.9
+    }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
+      m_default <- 0.5
+    }
+    set.seed(1);initial_population <- matrix(runif(popsize*0.6*para_numb,min = 0,max = 1),nrow = popsize*0.6,ncol = para_numb)
+    specified_individuals <- matrix(rep(m_default,popsize*0.4),nrow = popsize*0.4,byrow = TRUE)
+    suggestions <- rbind(specified_individuals,initial_population)
+
+    GA_HCR <- function(parameters,scenario_organization,scenario,start,end,rule){
+      # 実行ごとに履歴を初期化（グローバルに作る）
+      ga_history <<- list()
+      make_fitness <- function(parameters,scenario_organization,scenario,start,end,rule){
+        gen_counter <- 0L
+        ind_counter <- 0L
+
+        function(x){
+          ind_counter <<- ind_counter + 1L
+          if((ind_counter - 1L) %% popsize == 0L){
+            gen_counter <<- gen_counter + 1L
+          }
+          result <- scenario_and_management(parameters,
+                                            GA = 1,
+                                            custom = 1,
+                                            scenario_organization,
+                                            scenario,
+                                            start,
+                                            end,
+                                            rule,
+                                            m = x[1])
+
+          fitness <- result$fitness
+          record <- data.frame(scenario  = setting[i,5],
+                               RSB_short = result$RSB_short,
+                               RC_short  = result$RC_short,
+                               RSB_long  = result$RSB_long,
+                               RC_long   = result$RC_long,
+                               AAV       = result$AAV,
+                               Blim_risk = result$Blim_risk,
+                               m = x[1]
+          )
+          ga_history[[length(ga_history) + 1L]] <<- record
+          return(fitness)
+        }}
+
+      ga(type = "real-valued",
+         fitness = make_fitness(parameters,scenario_organization,scenario,start,end,rule),
+         lower = rep(0,para_numb), upper = rep(1,para_numb),
+         suggestions = suggestions,popSize = popsize,maxiter = maxiter,run = run,
+         parallel = FALSE,keepBest = TRUE,monitor = custom_monitor,seed = 1234)}
+
+    history_list <- vector("list",nrow(setting))
+    for (i in 1:nrow(setting)){GA_result <- GA_HCR(parameters,
+                                                   scenario_organization = setting[i,1],
+                                                   scenario = setting[i,2],
+                                                   start    = setting[i,3],
+                                                   end      = setting[i,4],
+                                                   rule     = rule)
+    # GA_HCR 内で ga_history を更新している前提
+    history_df <- do.call(rbind,ga_history)
+
+    # 必要なら条件の識別子を付ける
+    history_list[[i]] <- history_df
+    }
+    all_history <- do.call(rbind, history_list)
+
+    # performance and parameters of original
+    all_original_result <- sapply(1:nrow(setting),function(i){
+      filtered <- all_history[all_history == setting[i,5] &
+                                all_history$m == m_default,]
+      max_RC <- max(filtered$RC_long)
+      original_result <- filtered[which(filtered$RC_long == max_RC)[1],]
+    }) %>% t()
+  }
+
+  # performance and parameters of optimized
+  all_GA_result <- sapply(1:nrow(setting),function(i){
+    filtered <- all_history[all_history$scenario == setting[i,5] &
+                            all_history$Blim_risk >= 0.95 & all_history$RSB_long >= 1,]
+    max_RC <- max(filtered$RC_long)
+    GA_result <- filtered[which(filtered$RC_long == max_RC)[1],]
+  }) %>% t()
+
+  optimized_result <- rbind(cbind(name = "origin",all_original_result),cbind(name = "optimized",all_GA_result))
+
+  write.csv(optimized_result, paste0("optimized_result_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
+  write.csv(all_history, paste0("generation_populations_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
 }
 
-func <- function(parameters = stock_parameters(fish_data),
-                 GA = NULL,
-                 custom = NULL,
+func <- function(parameters,
+                 GA,
+                 custom,
                  scenario_organization, # "ICES" or "Japan"
-                 scenario, # "one-way" or "roller-coaster"
+                 scenario, # "one_way" or "roller_coaster"
                  start, # 0.75 or 0.5 or 0.25
                  end, # 0.75 or 0.5 or 0.25
                  rule,
@@ -1712,51 +2027,40 @@ func <- function(parameters = stock_parameters(fish_data),
                  delta3 = 0.4,
                  m = 0,
                  tau = 0.4,
-                 theta = 0.75){
+                 theta = 0.75,
+                 alpha_YY = 1,
+                 beta_YY = 1){
 
   if(is.null(GA)){
-  MSE_oneway <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "one-way", start = 0, end = 0)
-  MSE_rollercoaster <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "roller-coaster", start = 0, end = 0)
-  MSE_075_025 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.25)
-  MSE_05_025 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.25)
-  MSE_025_025 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.25)
-  MSE_075_05 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.5)
-  MSE_05_05 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.5)
-  MSE_025_05 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.5)
-  MSE_075_075 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.75, end = 0.75)
-  MSE_05_075 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.5, end = 0.75)
-  MSE_025_075 <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "", start = 0.25, end = 0.75)
+    MSE_oneway <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "one_way", start = 0, end = 0)
+    MSE_rollercoaster <- MSE_result(parameters,GA,custom,scenario_organization = "ICES", scenario = "roller_coaster", start = 0, end = 0)
+    MSE_confusion <- MSE_result(parameters,GA,custom,scenario_organization = "Japan", scenario = "confusion", start = 0, end = 0)
 
-  MSE_output <- tibble(MSE_oneway = MSE_oneway,
-                       MSE_rollercoaster = MSE_rollercoaster,
-                       MSE_075_025 = MSE_075_025,
-                       MSE_05_025 = MSE_05_025,
-                       MSE_025_025 = MSE_025_025,
-                       MSE_075_05 = MSE_075_05,
-                       MSE_05_05 = MSE_05_05,
-                       MSE_025_05 = MSE_025_05,
-                       MSE_075_075 = MSE_075_075,
-                       MSE_05_075 = MSE_05_075,
-                       MSE_025_075 = MSE_025_075,
-                       sim = sim)
+    MSE_output <- tibble(MSE_oneway = MSE_oneway,
+                         MSE_rollercoaster = MSE_rollercoaster,
+                         MSE_confusion = MSE_confusion,
+                         sim = sim)
 
-  performance_MSE(MSE_output,parameters) %>% write.csv(paste0("performance_",parameters$fish,".csv"))
-  return(MSE_output)
+    performance_MSE(MSE_output,parameters) %>% write.csv(paste0("performance_",parameters$fish,".csv"),row.names = FALSE)
+    return(MSE_output)
 
-  # ここからGA
+    # ここからGA
   }else{
-    # genetic argorithm for optimizing the parameters of type2 rule
-    GA_result(parameters, scenario_organization, scenario, start, end, rule = "type2_rule")
+    # genetic algorithm for optimizing the parameters of type2 rule
+    GA_result_type2_rule <- GA_result(parameters, scenario_organization, scenario, start, end, rule = "type2_rule")
 
-    # genetic argorithm for optimizing the parameters of rfb rule
-    GA_result(parameters, scenario_organization, scenario, start, end, rule = "rfb_rule")
+    # genetic algorithm for optimizing the parameters of rfb rule
+    GA_result_rfb_rule <- GA_result(parameters, scenario_organization, scenario, start, end, rule = "rfb_rule")
 
-    # genetic argorithm for optimizing the parameters of type2 rule with length data
-    GA_result(parameters, scenario_organization, scenario, start, end, rule = "type2_rule_length")
+    # genetic algorithm for optimizing the parameters of type2 rule with length data
+    GA_result_type2_rule_length <- GA_result(parameters, scenario_organization, scenario, start, end, rule = "type2_rule_length")
 
-    # genetic argorithm for optimizing the parameters of rfb rule with average catch
-    GA_result(parameters, scenario_organization, scenario, start, end, rule = "ICES_average")
-    }}
+    # genetic algorithm for optimizing the parameters of rfb rule with average catch
+    GA_result_ICES_average <- GA_result(parameters, scenario_organization, scenario, start, end, rule = "ICES_average")
+
+    # genetic algorithm for optimizing the parameters of chr rule
+    GA_result_chr <- GA_result(parameters, scenario_organization, scenario, start, end, rule = "chr_rule")
+  }}
 
 Generation_Time <- function(parameters){
   maa <- parameters[[9]]
@@ -1768,6 +2072,86 @@ Generation_Time <- function(parameters){
   G <- sum(age*L*maa)/sum(L*maa)
 
   return(G)
+}
+
+candidate_rule <- function(parameters,rule){
+  if(rule == "rfb_rule"){
+    para_numb <- 3
+    if(parameters$k_von < 0.2){
+      m_default <- 0.95
+    }else if(0.2 <= parameters$k_von & parameters$k_von < 0.32){
+      m_default <- 0.9
+    }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
+      m_default <- 0.5
+    }
+
+    default_candidate <- matrix(NA,22,(8+para_numb))
+    default_candidate[,1] <- c(rep("origin",11),rep("candidate",11))
+    default_candidate[,2] <- rep(c(setting[,5]),2)
+
+    result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
+                                                                            scenario_organization = setting[i,1],
+                                                                            scenario = setting[i,2],
+                                                                            start = setting[i,3],
+                                                                            end = setting[i,4],
+                                                                            rule)[18:23])})
+    default_candidate[1:11,3:8] <- t(result_origin)
+
+    colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
+    default_candidate[,9:(8+para_numb)] <- matrix(c(m_default,0.4,0.75),nrow = 22,ncol = para_numb,byrow = TRUE)
+
+
+    # the performance with candidate parameters
+    result_candidate <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
+                                                                               scenario_organization = setting[i,1],
+                                                                               scenario = setting[i, 2],
+                                                                               start = setting[i,3],
+                                                                               end = setting[i,4],
+                                                                               rule,
+                                                                               m = m_default,
+                                                                               tau = candidates_tau[i],
+                                                                               theta = 0.75)[1:6])})
+
+    default_candidate[12:22,3:8] <- t(result_candidate)
+
+    default_candidate[12:22,9:(8+para_numb)] <- cbind(rep(m_default,11),candidates_tau,rep(0.75,11))
+  }
+
+  if(rule == "type2_rule"){
+    para_numb <- 5
+
+    default_candidate <- matrix(NA,22,(8+para_numb))
+    default_candidate[,1] <- c(rep("origin",11),rep("candidate",11))
+    default_candidate[,2] <- rep(c(setting[,5]),2)
+
+    result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
+                                                                            scenario_organization = setting[i,1],
+                                                                            scenario = setting[i,2],
+                                                                            start = setting[i,3],
+                                                                            end = setting[i,4],
+                                                                            rule)[18:23])})
+    default_candidate[1:11,3:8] <- t(result_origin)
+
+    colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
+    default_candidate[,9:(8+para_numb)] <- matrix(c(0.8,0.7,0.5,0.4,0.4),nrow = 22,ncol = para_numb,byrow = TRUE)
+
+    # the performance with candidate parameters
+    result_candidate <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
+                                                                               scenario_organization = setting[i,1],
+                                                                               scenario = setting[i, 2],
+                                                                               start = setting[i,3],
+                                                                               end = setting[i,4],
+                                                                               rule,
+                                                                               Btarget = candidates_BT[i],
+                                                                               Blimit = 0.7,
+                                                                               delta1 = candidates_delta1[i],
+                                                                               delta2 = 0.4,
+                                                                               delta3 = 0.4)[1:6])})
+
+    default_candidate[12:22,3:8] <- t(result_candidate)
+    default_candidate[12:22,9:(8+para_numb)] <- cbind(c(rep(0.7,5),rep(0.5,3),rep(0.3,3)),rep(0.7,11),c(rep(0.8,5),rep(0.5,3),rep(0.3,3)),rep(0.4,11),rep(0.4,11))
+  }
+  write.csv(default_candidate,paste0("default_candidate_", rule, "_", parameters$fish, ".csv"),row.names = FALSE)
 }
 
 ## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
@@ -1800,17 +2184,17 @@ plaice_data <- list(fish = "plaice",
 
 ## Thornback ray (Raja clavata; rjc.27.afg) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
 thornbackray_data <- list(fish = "thornback_ray",
-                           a = 0.0024, # allometry parameter
-                           b = 3.2653, # allometry parameter
-                           L_inf = 139.5, # von Bertalanffy growth parameter
-                           L50 = 71.8, # length at 50% maturity
-                           a50 = 6.13, # age at 50% maturity
-                           t0 = -1.84, # von Bertalanffy growth parameter
-                           k_von = 0.09, # von Bertalanffy growth parameter
-                           waa = c(212.11,475.99,864.24,1374.08,1995.14,2712.56,3509.27,4367.62,5270.52,6202.15,7148.29,8096.61,9036.59,9959.56,10858.51,11727.97,12563.80,13363.03,14123.73,14844.76,15525.71,16166.73,16768.44,17331.79,17858.01,18348.55,18804.97,19228.94,19622.18,19986.42,20323.39,20634.78), # catch weight at age
-                           alpha = 0.0742227910250102, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-                           beta = 90.9090909090909,
-                           F_initial = 0.1)
+                          a = 0.0024, # allometry parameter
+                          b = 3.2653, # allometry parameter
+                          L_inf = 139.5, # von Bertalanffy growth parameter
+                          L50 = 71.8, # length at 50% maturity
+                          a50 = 6.13, # age at 50% maturity
+                          t0 = -1.84, # von Bertalanffy growth parameter
+                          k_von = 0.09, # von Bertalanffy growth parameter
+                          waa = c(212.11,475.99,864.24,1374.08,1995.14,2712.56,3509.27,4367.62,5270.52,6202.15,7148.29,8096.61,9036.59,9959.56,10858.51,11727.97,12563.80,13363.03,14123.73,14844.76,15525.71,16166.73,16768.44,17331.79,17858.01,18348.55,18804.97,19228.94,19622.18,19986.42,20323.39,20634.78), # catch weight at age
+                          alpha = 0.0742227910250102, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
+                          beta = 90.9090909090909,
+                          F_initial = 0.1)
 
 ## Anchovy (Engraulis encrasicolus; ane-pore) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
 anchovy_data <- list(fish = "anchovy",
