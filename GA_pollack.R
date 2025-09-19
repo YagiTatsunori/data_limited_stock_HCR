@@ -37,7 +37,7 @@ setting <- data.frame(
 
 # 保存用リスト
 generation_populations <-  all_results <- list()
-parameters = stock_parameters(thornbackray_data)
+parameters = stock_parameters(pollack_data)
 ver_stk <- parameters$ver_stk;waa <- parameters$waa;alpha <- parameters$alpha;beta <- parameters$beta;L_inf <- parameters$L_inf;k_von <- parameters$k_von
 na <- parameters$na;ver_stk <- parameters$ver_stk;saa <- parameters$saa;maa <- parameters$maa;M <- parameters$M
 laa <- parameters$laa;S2 <- parameters$S2
@@ -55,19 +55,19 @@ for(i in 1:na){
 naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
 SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
 
-results_thornbackray <- func(parameters = parameters,
-                             GA = 1,
-                             custom = NULL,
-                             scenario_organization, # "ICES" or "Japan"
-                             scenario, # "one_way" or "roller_coaster"
-                             start, # 0.75 or 0.5 or 0.25
-                             end, # 0.75 or 0.5 or 0.25
-                             rule,
-                             Btarget = 0.8,
-                             Blimit = 0.7,
-                             delta1 = 0.5,
-                             delta2 = 0.4,
-                             delta3 = 0.4,
-                             m = 0,
-                             tau = 0.4,
-                             theta = 0.75)
+results_pollack <- func(parameters = parameters,
+                        GA = 1,
+                        custom = NULL,
+                        scenario_organization, # "ICES" or "Japan"
+                        scenario, # "one_way" or "roller_coaster"
+                        start, # 0.75 or 0.5 or 0.25
+                        end, # 0.75 or 0.5 or 0.25
+                        rule,
+                        Btarget = 0.8,
+                        Blimit = 0.7,
+                        delta1 = 0.5,
+                        delta2 = 0.4,
+                        delta3 = 0.4,
+                        m = 0,
+                        tau = 0.4,
+                        theta = 0.75)

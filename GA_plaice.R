@@ -37,25 +37,9 @@ setting <- data.frame(
 
 # 保存用リスト
 generation_populations <-  all_results <- list()
-parameters = stock_parameters(thornbackray_data)
-ver_stk <- parameters$ver_stk;waa <- parameters$waa;alpha <- parameters$alpha;beta <- parameters$beta;L_inf <- parameters$L_inf;k_von <- parameters$k_von
-na <- parameters$na;ver_stk <- parameters$ver_stk;saa <- parameters$saa;maa <- parameters$maa;M <- parameters$M
-laa <- parameters$laa;S2 <- parameters$S2
-MSY <- parameters$MSY;Bmsy <- parameters$Bmsy;SBmsy <- parameters$SBmsy;Fmsy <- parameters$Fmsy;Fcrash <- parameters$Fcrash;B0 <- parameters$B0
+parameters = stock_parameters(plaice_data)
 
-probs <- age_length <- matrix(0,na,5)
-for(i in 1:na){
-  age_length[i,] <- floor(seq(laa[i]-2, laa[i]+2, by=1))
-  probs[i,] <- dnorm(age_length[i,], laa[i], 0.2)
-  probs[i,] <- probs[i,]/(sum(probs[i,]))
-}
-# 年数と初期資源量はシナリオによって違うので注意
-# various stock biomass and catch trajectories simulation
-### according to the value of k, select the management tool
-naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,130,sim))
-SBt <- iaa <- iaa_obs <- Catch <- matrix(0,130,sim)
-
-results_thornbackray <- func(parameters = parameters,
+results_plaice <- func(parameters = parameters,
                              GA = 1,
                              custom = NULL,
                              scenario_organization, # "ICES" or "Japan"
