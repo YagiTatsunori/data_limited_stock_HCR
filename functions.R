@@ -1,108 +1,3 @@
-stock_parameters <- function(fish_data){
-
-  fish = fish_data$fish
-  a = fish_data$a # allometry parameter
-  b = fish_data$b # allometry parameter
-  L_inf = fish_data$L_inf # von Bertalanffy growth parameter
-  L50 = fish_data$L50 # length at 50% maturity
-  a50 = fish_data$a50 # age at 50% maturity
-  t0 = fish_data$t0 # von Bertalanffy growth parameter
-  k_von = fish_data$k_von # von Bertalanffy growth parameter
-  waa = fish_data$waa # catch weight at age
-  alpha = fish_data$alpha # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-  beta = fish_data$beta
-  F_initial = fish_data$F_initial
-  yr = 100
-
-  # calculation for stock parameters from given parameters
-  laa <- (waa/a)^(1/b) # average length for each age
-  Amax <- ceiling(t0-(log(0.05))/k_von) # max age (growth reaches 95% of Linf)
-  na <- Amax # age of stock (0 age to na+ group)
-  maa <- rep(0,na)
-  for (s in 1:na){
-    if      (s < a50 - avar){maa[s] <- 0}
-    else if (s > a50 + avar){maa[s] <- 1}
-    else                    {maa[s] <- 1/(1+19^((a50-s)/t95))}
-  } # maturity for each age
-  M <- exp(0.55-1.61*log(laa)+1.44*log(L_inf)+log(k_von)) # natural mortality for each age
-
-  # selectivity of fishing mortality at each age
-  saa <- rep(0,na);t1 <- a50+t95
-  for (s in 1:na){
-    if (s < t1){saa[s] <- 2^-((s-t1)/sl)^2}
-    else       {saa[s] <- 2^-((s-t1)/sr)^2}
-  }
-  S2a50 <- 0.1*a50 # inflection point of selectivity curve for biomass index
-  S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
-  ver_stk <- 10/sum(waa) # initial stock biomass for each age
-
-  naa <- caa <- wcaa <- faa <- baa <- ssb <- matrix(0,na,yr)
-  SBt <- c() # sum of the weight of spawning stock biomass
-  naa[,1] <- ver_stk
-  F <- rep(F_initial,yr) # fishing mortality in every year
-  ssb[,1] <- naa[,1]*maa*waa # spawning stock biomass
-  SBt[1] <- sum(ssb[,1], na.rm = T)
-  for(i in 1:yr){faa[,i] <- F[i]*saa} # fishing mortality (no fishing pressure to clarify equivalent status)
-  caa[,1] <- naa[,1]*(1-exp(-faa[,1]))*exp(-M/2)
-  colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:yr
-
-  for (t in 2:yr) {
-    naa[1,t] <- (alpha*SBt[t-1]/(beta+SBt[t-1])) # Beverton-Holt type reproductive function
-    naa[2,t] <- naa[1,t-1]*exp(-faa[1,t-1]-M[1])
-    for(s in 3:(na-1)){
-      naa[s,t] <- naa[s-1,t-1]*exp(-faa[s-1,t-1]-M[s-1])
-    }
-    naa[na,t] <- naa[na-1,t-1]*exp(-faa[na-1,t-1]-M[na-1]) + naa[na,t-1]*exp(-faa[na,t-1]-M[na])
-    ssb[,t] <- naa[,t]*maa*waa
-    SBt[t] <- sum(ssb[,t], na.rm = T)
-    caa[,t] <- naa[,t]*(1-exp(-faa[,t]))*exp(-M/2)
-  }
-  wcaa = caa*waa; baa = naa*waa
-  data_for_RP <- tibble(naa = naa,   # number of stock
-                        wcaa = wcaa, # weight of catch
-                        ssb = ssb,   # spawning stock biomass
-                        caa = caa,   # number of catch
-                        faa = faa,   # fishing mortality
-                        baa = baa)  # weight of stock biomass
-
-  ################################################################################
-  ############# deriving reference points with "FLR"
-  slot <- rep("landings.n",na*yr);age <- rep(c(1:na),yr);year <- sort(rep(c(1:yr),na));data <- as.vector(data_for_RP$caa);units <- rep('100 million',na*yr)
-  data_landn <- data.frame(slot,age,year,data,units)
-  landn <- subset(data_landn, slot=="landings.n", select=-slot)
-  landsn <- as.FLQuant(landn)
-  stock_data <- as.FLStock(data_landn)
-  m(stock_data) <- M
-  m.spwn(stock_data) <- harvest.spwn(stock_data) <- 0
-  mat(stock_data) <- maa
-  range(stock_data, c("minfbar", "maxfbar")) <- c(na,na)
-  units(catch(stock_data)) <- units(discards(stock_data)) <- units(landings(stock_data)) <- units(stock(stock_data)) <- 'g'
-  units(catch.n(stock_data)) <- units(discards.n(stock_data)) <- units(landings.n(stock_data)) <- units(stock.n(stock_data)) <- '100 million'
-  units(catch.wt(stock_data)) <- units(discards.wt(stock_data)) <- units(landings.wt(stock_data)) <- units(stock.wt(stock_data)) <- 'g'
-  units(harvest(stock_data)) <- 'f'
-  harvest(stock_data) <- as.vector(data_for_RP$faa)
-  catch.n(stock_data) <- landings.n(stock_data)
-  stock.n(stock_data) <- as.vector(data_for_RP$naa)
-  discards.n(stock_data) <- rep(0,yr)
-  stock.wt(stock_data) <- catch.wt(stock_data) <- landings.wt(stock_data) <- discards.wt(stock_data) <- rep(waa,yr)
-  landings(stock_data) <- computeLandings(stock_data)
-  discards(stock_data) <- computeDiscards(stock_data)
-  catch(stock_data) <- computeCatch(stock_data)
-  stock(stock_data) <- computeStock(stock_data)
-
-  plsr <- as.FLSR(stock_data)
-  model(plsr) <- bevholt() # ricker() or bevholt(): if you need, type "help(ricker)"
-  plsr <- fmle(plsr)
-  # plot(plsr)
-  plrp <- brp(FLBRP(stock_data,sr=plsr))
-  plrp@refpts
-  # plot(plrp, obs=T)
-
-  Fmsy <- plrp@refpts["msy","harvest"]@.Data[1];Fcrash <- plrp@refpts["crash","harvest"]@.Data[1];MSY <- plrp@refpts["msy","yield"]@.Data[1];SBmsy <- plrp@refpts["msy","ssb"]@.Data[1];Bmsy <- plrp@refpts["msy","biomass"]@.Data[1];SB0 <- plrp@refpts["virgin","ssb"]@.Data[1];B0 <- plrp@refpts["virgin","biomass"]@.Data[1]
-  result <- list(alpha = alpha,beta = beta,fish = fish,waa = waa,k_von = k_von,L_inf = L_inf,laa = laa,na = na,maa = maa,M = M,saa = saa,ver_stk = ver_stk,S2 = S2,Fmsy = Fmsy,Fcrash = Fcrash,MSY = MSY,SBmsy = SBmsy,Bmsy = Bmsy,SB0 = SB0,B0 = B0) # 引数をとっておいて再現できるようにする
-  return(result)
-}
-
 index_bind_type_1 <- function(sim_result,index,RP_name){ # 年齢ごとのデータを取るタイプ
   (sim_result[[index]] %>% apply(2:3,sum) %>%
      apply(1, function(x) quantile(x, prob = c(0.05, 0.5, 0.95)))/RP_name) %>%
@@ -179,7 +74,7 @@ plot_res <- function(result,ylab_name,xlim_start,ylim_end,filename){
           legend.title = element_text(size = 20),
           legend.key.spacing.y = unit(1, 'lines'),
           axis.ticks.length = unit(0.3,"cm"))
-  ggsave(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR/Figs_",parameters$fish,"/",filename), width = 170, height = 170, units = "mm", dpi = 300)
+  ggsave(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_BMSY/Figs_",parameters$fish,"/",filename), width = 170, height = 170, units = "mm", dpi = 300)
 }
 
 # plot the simulation results
@@ -210,8 +105,8 @@ scenario_and_management <- function(parameters,
                                     custom,
                                     scenario_organization, # "ICES" or "Japan"
                                     scenario, # "one_way" or "roller_coaster"
-                                    start, # 0.75 or 0.5 or 0.25
-                                    end, # 0.75 or 0.5 or 0.25
+                                    start, # 1.5 or 1 or 0.5
+                                    end, # 1.5 or 1 or 0.5
                                     rule,
                                     Btarget = 0.8,
                                     Blimit = 0.7,
@@ -222,10 +117,28 @@ scenario_and_management <- function(parameters,
                                     tau = 0.4,
                                     theta = 0.75
 ){
-  ver_stk <- parameters$ver_stk;waa <- parameters$waa;alpha <- parameters$alpha;beta <- parameters$beta;L_inf <- parameters$L_inf;k_von <- parameters$k_von
-  na <- parameters$na;ver_stk <- parameters$ver_stk;saa <- parameters$saa;maa <- parameters$maa;M <- parameters$M
-  laa <- parameters$laa;S2 <- parameters$S2
-  MSY <- parameters$MSY;Bmsy <- parameters$Bmsy;SBmsy <- parameters$SBmsy;Fmsy <- parameters$Fmsy;Fcrash <- parameters$Fcrash;B0 <- parameters$B0
+  waa <- parameters$waa
+  waa_catch <- parameters$waa_catch
+  alpha <- parameters$alpha
+  beta <- parameters$beta
+  L_inf <- parameters$L_inf
+  k_von <- parameters$k_von
+  na <- parameters$na
+  saa <- parameters$saa
+  maa <- parameters$maa
+  M <- parameters$M
+  laa <- parameters$laa
+  a50 <- parameters$a50
+  MSY <- parameters$MSY
+  SBmsy <- parameters$SBmsy
+  Bmsy <- parameters$Bmsy
+  Fmsy <- parameters$Fmsy2F
+  Fcrash <- parameters$Fcrash2F
+  B0 <- parameters$B0
+
+  S2a50 <- 0.1*a50 # inflection point of selectivity curve for biomass index
+  S2 <- S2max/(1+exp(-steepness*((1:na)-S2a50))) # selectivity for biomass index at each age
+  ver_stk <- 10/sum(waa) # initial stock biomass for each age
 
   probs <- age_length <- matrix(0,na,5)
   for(i in 1:na){
@@ -241,7 +154,7 @@ scenario_and_management <- function(parameters,
 
   # custom=NULL: パラメータはデフォルト
   if(is.null(custom)){
-    Btarget <- 0.8; Blimit <- 0.7; delta1 <- 0.5; delta2 <- 0.4; delta3 <- 0.4; tau <- 0.4; theta <- 0.75
+    Btarget <- 0.8;Blimit <- 0.7;delta1 <- 0.5;delta2 <- 0.4;delta3 <- 0.4;tau <- 0.4;theta <- 0.75
     if(k_von < 0.2){
       m <- 0.95
     }else if(0.2 <= k_von & k_von < 0.32){
@@ -288,7 +201,7 @@ scenario_and_management <- function(parameters,
         }
         ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
         SBt[1,] <- colSums(ssb[,1,])
-        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]-M))*(faa[,1,]/(faa[,1,]+M)) # Baranov catch equation
         colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
 
         for (t in 2:ny_before){
@@ -297,9 +210,9 @@ scenario_and_management <- function(parameters,
           naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
           ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
           SBt[t,] <- colSums(ssb[,t,])
-          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]-M))*(faa[,t,]/(faa[,t,]+M)) # Baranov catch equation
         }
-        wcaa = caa*waa; baa = naa*waa
+        wcaa = caa*waa_catch; baa = naa*waa # catch amount from waa_catch
       }
       if(scenario_organization == "Japan"){
         ny_before <- 25
@@ -319,10 +232,10 @@ scenario_and_management <- function(parameters,
                 SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
               }
               end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
-              return(abs(B0*end-end_biomass))
+              return(abs(Bmsy*end-end_biomass))
             }
 
-            naa_F[,1] <- B0*start/(sum(waa))
+            naa_F[,1] <- Bmsy*start/(sum(waa))
             ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
             SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
             colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
@@ -333,20 +246,23 @@ scenario_and_management <- function(parameters,
           }
           ## function for calculate Japan scenarios
 
-          faa[,1:ny_before,1:(sim/9)] <- start_end_cal(0.75,0.25);faa[,1:ny_before,(1+(sim/9)):(2*(sim/9))] <- start_end_cal(0.5,0.25);faa[,1:ny_before,(1+2*(sim/9)):(3*(sim/9))] <- start_end_cal(0.25,0.25)
-          faa[,1:ny_before,(1+3*(sim/9)):(4*(sim/9))] <- start_end_cal(0.75,0.5);faa[,1:ny_before,(1+4*(sim/9)):(5*(sim/9))] <- start_end_cal(0.5,0.5);faa[,1:ny_before,(1+5*(sim/9)):(6*(sim/9))] <- start_end_cal(0.25,0.5)
-          faa[,1:ny_before,(1+6*(sim/9)):(7*(sim/9))] <- start_end_cal(0.75,0.75);faa[,1:ny_before,(1+7*(sim/9)):(8*(sim/9))] <- start_end_cal(0.5,0.75);faa[,1:ny_before,(1+8*(sim/9)):(9*(sim/9))] <- start_end_cal(0.25,0.75)
+
+          for(i in 1:9){
+            start_idx <- 1+(i-1)*(sim/9)
+            end_idx <- i*(sim/9)
+            faa[,1:ny_before,start_idx:end_idx] <- start_end_cal(setting[i+2,3],setting[i+2,4])
+          }
 
           # various stock biomass and catch trajectories simulation
           # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
-          naa[,1,] <- rep(rep(B0*c(0.75,0.5,0.25)/(sum(waa)),each=sim/9),3)
+          naa[,1,] <- rep(rep(Bmsy*c(1.5,1,0.5)/(sum(waa)),each=sim/9),3)
         }else{
         # calculate the fishing mortality before management
         naa_F <- ssb_F <- matrix(0,na,(ny_before+1))
         SBt_F <- c() # sum of the weight of spawning stock biomass
 
         # biomass in plan
-        naa_F[,1] <- B0*start/(sum(waa))
+        naa_F[,1] <- Bmsy*start/(sum(waa))
         ssb_F[,1] <- naa_F[,1]*maa*waa # spawning stock biomass
         SBt_F[1] <- sum(ssb_F[,1], na.rm = T)
         colnames(naa_F) <- colnames(ssb_F) <- 1:(ny_before+1)
@@ -361,7 +277,7 @@ scenario_and_management <- function(parameters,
             SBt_F[t] <- sum(naa_F[,t]*maa*waa, na.rm = T)
           }
           end_biomass <- sum(naa_F[,(ny_before+1)]*waa)
-          return(abs(B0*end-end_biomass))
+          return(abs(Bmsy*end-end_biomass))
         }
         # 管理前シナリオで実行するFを計算
         F_before_management <- optimize(F_cal, interval = c(0, 10))$minimum*saa
@@ -369,12 +285,12 @@ scenario_and_management <- function(parameters,
 
         # various stock biomass and catch trajectories simulation
         # the number of ages are "a", years are "t", the number of scenario is "k" [a,t,k]
-        naa[,1,] <- rep(B0*start/(sum(waa)),sim)
+        naa[,1,] <- rep(Bmsy*start/(sum(waa)),sim)
         faa[,1:ny_before,] <- rep(F_before_management,sim)
       }
         ssb[,1,] <- naa[,1,]*maa*waa # spawning stock biomass
         SBt[1,] <- colSums(ssb[,1,])
-        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]))*exp(-M/2)
+        caa[,1,] <- naa[,1,]*(1-exp(-faa[,1,]-M))*(faa[,1,]/(faa[,1,]+M))
         colnames(naa) <- colnames(wcaa) <- colnames(ssb) <- colnames(caa) <- colnames(faa) <- colnames(baa) <- 1:130
 
         for (t in 2:ny_before){
@@ -383,9 +299,9 @@ scenario_and_management <- function(parameters,
           naa[na,t,] <- naa[na-1,t-1,]*exp(-faa[na-1,t-1,]-M[na-1]) + naa[na,t-1,]*exp(-faa[na,t-1,]-M[na])
           ssb[,t,] <- naa[,t,]*maa*waa # spawning stock biomass
           SBt[t,] <- colSums(ssb[,t,])
-          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+          caa[,t,] <- naa[,t,]*(1-exp(-faa[,t,]-M))*(faa[,t,]/(faa[,t,]+M))
         }
-        wcaa = caa*waa; baa = naa*waa
+        wcaa = caa*waa_catch; baa = naa*waa
       }
 
       ny_after <- 30
@@ -423,9 +339,8 @@ scenario_and_management <- function(parameters,
 
         # length（2列目）ごとに numbers（3列目）を合計
         unique_lengths <- sort(unique(subset_mat[,2]))
-        length_sums <- sapply(unique_lengths, function(len){
-          sum(subset_mat[subset_mat[,2] == len,3])
-        })
+        length_sums_mat <- rowsum(subset_mat[,3, drop = FALSE], group = subset_mat[,2])
+        length_sums <- length_sums_mat[,1]
 
         # 合計結果をベクトルとして保持
         # names(length_sums) は length の値
@@ -462,7 +377,7 @@ scenario_and_management <- function(parameters,
 
       optimize_faa <- function(t,catch_target){
         F_cal <- function(F_beta,t,k){
-          Catch_plan <- sum(naa[,t,k]*(1-exp(-F_beta*Fmsy*saa))*exp(-M/2)*waa)
+          Catch_plan <- sum(naa[,t,k]*(1-exp(-F_beta*Fmsy*saa-M))*(F_beta*Fmsy*saa/(F_beta*Fmsy*saa+M))*waa_catch)
           abs(Catch_plan-catch_target[t,k])
         }
         faa[,t,] <<- sapply(1:sim,function(k){
@@ -471,7 +386,7 @@ scenario_and_management <- function(parameters,
       }
 
       update_biomass <- function(t){
-        caa[,t,] <<- naa[,t,]*(1-exp(-faa[,t,]))*exp(-M/2)
+        caa[,t,] <<- naa[,t,]*(1-exp(-faa[,t,]-M))*(faa[,t,]/(faa[,t,]+M))
         ssb[,t,] <<- naa[,t,]*maa*waa
         SBt[t,] <<- apply(ssb[,t,],2,sum,na.rm = TRUE)
         iaa[t,] <<- colSums(S2*naa[,t,]*waa)
@@ -507,9 +422,8 @@ scenario_and_management <- function(parameters,
 
             # length（2列目）ごとに numbers（3列目）を合計
             unique_lengths <- sort(unique(mat[,2]))
-            length_sums <- sapply(unique_lengths, function(len){
-              sum(mat[mat[,2] == len,3])
-            })
+            length_sums_mat <- rowsum(subset_mat[,3, drop = FALSE], group = subset_mat[,2])
+            length_sums <- length_sums_mat[,1]
 
             # 合計結果をベクトルとして保持
             # names(length_sums) は length の値
@@ -537,7 +451,11 @@ scenario_and_management <- function(parameters,
             LF_M_chr[[k]] <- theta*lc[k]+(1-theta)*Linf[1:ny_before,k]
           }
           f_proxy <- rep(0,sim)
-          year_U <- lapply(mapply(function(x,y) x/y,L_mean_chr,LF_M_chr,SIMPLIFY = FALSE),function(x) which(x >= 1))
+          year_U <- vector("list", length(L_mean_chr))
+          for (i in seq_along(L_mean_chr)) {
+            ratio <- L_mean_chr[[i]] / LF_M_chr[[i]]
+            year_U[[i]] <- which(ratio >= 1)
+          }
           for(k in 1:sim){
             f_proxy[k] <- sum(Catch[year_U[[k]],k]/iaa_obs[year_U[[k]],k])/length(year_U[[k]])
           }
@@ -546,7 +464,7 @@ scenario_and_management <- function(parameters,
         for(t in (ny_before+1):ny){
           update_naa(t)
 
-          if(rule == "rfb_rule" || rule == "ICES_average"){
+          if(rule == "rfb_rule" || rule == "rfb_Cave"){
             r[t-ny_before,] <<- apply(iaa_obs[(t-3):(t-2),],2,mean)/apply(iaa_obs[(t-6):(t-4),],2,mean)
             f[t-ny_before,] <<- sapply(L_mean,`[`,t-ny_before)/sapply(LF_M,`[`,t-ny_before)
             b[t-ny_before,] <<- pmin(iaa_obs[t-2,]/Itrigger,1)
@@ -579,7 +497,7 @@ scenario_and_management <- function(parameters,
             optimize_faa(t,ABC)
             update_biomass(t)
 
-          }else if(rule == "type2_rule_length"){
+          }else if(rule == "type2_f"){
             f[t-ny_before,] <<- sapply(L_mean,`[`,t-ny_before)/sapply(LF_M,`[`,t-ny_before)
             for(k in 1:sim){
               data_input <- data.frame(year = (ny_before-ny_reference):(t-2),
@@ -605,7 +523,7 @@ scenario_and_management <- function(parameters,
       }
       run_hcr(rule)
 
-      wcaa <- waa*caa; baa <- waa*naa
+      wcaa <- waa_catch*caa; baa <- waa*naa
       RSB_short <- (ssb[,(ny_before+10),] %>% apply(2,sum) %>% median())/SBmsy
       RC_short <- (wcaa[,(ny_before+1):(ny_before+10),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/MSY
       RSB_long <- (ssb[,(ny_before+21):(ny_before+30),] %>% apply(2:3,sum) %>% apply(2,mean) %>% median())/SBmsy
@@ -632,7 +550,7 @@ scenario_and_management <- function(parameters,
                             Blim_risk = Blim_risk)
       }else if(custom == 1){
         if(is.null(GA)){
-          if(rule %in% c("rfb_rule","ICES_average","chr_rule")){
+          if(rule %in% c("rfb_rule","rfb_Cave","chr_rule")){
             result_rule <- list(scenario = scenario,
                                 RSB_short = RSB_short,
                                 RC_short = RC_short,
@@ -643,7 +561,7 @@ scenario_and_management <- function(parameters,
                                 m = m,
                                 tau = tau,
                                 theta = theta)
-          }else if(rule %in% c("type2_rule","type2_rule_length")){
+          }else if(rule %in% c("type2_rule","type2_f")){
             result_rule <- list(scenario = scenario,
                                 RSB_short = RSB_short,
                                 RC_short = RC_short,
@@ -666,7 +584,7 @@ scenario_and_management <- function(parameters,
           if(Blim_risk >= 0.95){
             fitness <- fitness+5
           }
-          if(rule %in% c("rfb_rule","ICES_average","chr_rule")){
+          if(rule %in% c("rfb_rule","rfb_Cave","chr_rule")){
             result_rule <- list(fitness = fitness,
                                 RSB_short = RSB_short,
                                 RC_short = RC_short,
@@ -677,7 +595,7 @@ scenario_and_management <- function(parameters,
                                 m = m,
                                 tau = tau,
                                 theta = theta)
-          }else if(rule %in% c("type2_rule","type2_rule_length")){
+          }else if(rule %in% c("type2_rule","type2_f")){
             result_rule <- list(fitness = fitness,
                                 RSB_short = RSB_short,
                                 RC_short = RC_short,
@@ -706,8 +624,8 @@ MSE_result <- function(parameters,
                        rule)
 {
   args <- list(parameters,GA,custom,scenario_organization,scenario,start,end)
-  rules <- c("rfb_rule","chr_rule","type2_rule","ICES_average","type2_rule_length")
-  names(rules) <- c("management_rfb","management_chr","management_type2","management_ICES_average","management_type2_rule_length")
+  rules <- c("rfb_rule","type2_rule","rfb_Cave","type2_f","chr_rule")
+  names(rules) <- c("management_rfb","management_type2","management_rfb_Cave","management_type2_f","management_chr")
   results <- lapply(rules,function(r) do.call(scenario_and_management,c(args,list(rule = r))))
   output <- as_tibble(results)
 }
@@ -749,8 +667,7 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
                        specified_individuals <- matrix(rep(unlist(default_params),(popsize-10)*0.1),nrow = (popsize-10)*0.1,byrow = TRUE)
                        initial_population <- matrix(runif((popsize-10)*0.9*para_numb),nrow = (popsize-10)*0.9)
                        sequences <- matrix(rep(seq(0.1,1,by=0.1),para_numb),nrow = 10)
-                       rbind(specified_individuals,initial_population,sequences)},
-                     fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
+                       rbind(specified_individuals,initial_population,sequences)},                     fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
                        scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
                                                m = x[1],tau = x[2],theta = x[3])})
 
@@ -761,17 +678,16 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
                          specified_individuals <- matrix(rep(unlist(default_params),(popsize-10)*0.1),nrow = (popsize-10)*0.1,byrow = TRUE)
                          initial_population <- matrix(runif((popsize-10)*0.9*para_numb),nrow = (popsize-10)*0.9)
                          sequences <- matrix(rep(seq(0.1,1,by=0.1),para_numb),nrow = 10)
-                         rbind(specified_individuals,initial_population,sequences)},
-                       fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
+                         rbind(specified_individuals,initial_population,sequences)},                       fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
                          scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
                                                  Btarget = x[1],Blimit = x[2],delta1 = x[3],delta2 = x[4],delta3 = x[5])})
 
     # ルールごとの設定
     rule_config <- switch(rule,
                           "rfb_rule" = rfb_config,
-                          "ICES_average" = rfb_config,
+                          "rfb_Cave" = rfb_config,
                           "type2_rule" = type2_config,
-                          "type2_rule_length" = type2_config,
+                          "type2_f" = type2_config,
                           "chr_rule" = rfb_config,
                           stop("Unknown rule"))
 
@@ -787,22 +703,20 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
         function(x){ind_counter <<- ind_counter + 1L
         if ((ind_counter - 1L) %% popsize == 0L) gen_counter <<- gen_counter + 1L
         result <- rule_config$fitness_function(x,parameters,scenario_organization,scenario,start,end,rule)
-        record <- data.frame(scenario = setting[i,5],result[setdiff(names(result),"fitness")])
-        ga_history[[length(ga_history)+1L]] <<- record
         result$fitness
         }}
 
       ga(type = "real-valued",
          fitness = make_fitness(parameters,scenario_organization,scenario,start,end,rule),
          lower = rep(0,para_numb),upper = rep(1,para_numb),
-         suggestions = suggestions,popSize = popsize,maxiter = maxiter,run = run,
+         suggestions = suggestions,popSize = popsize,
+         maxiter = maxiter,run = run,
          parallel = TRUE,keepBest = TRUE,monitor = custom_monitor,seed = 1234)
     }
 
     # GA 実行ループ
     history_list <- vector("list",nrow(setting))
     for (i in seq_len(nrow(setting))){
-      ga_history <- list()
       GA_result <- GA_HCR(parameters,
                           scenario_organization = setting[i,1],
                           scenario = setting[i,2],
@@ -814,14 +728,14 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
         # 空のデータフレームを用意
         scenario_df <- data.frame()
 
-        for (j in 1:nrow(optimized_params)) {
-          x <- optimized_params[j, ]
+        for(j in 1:nrow(optimized_params)){
+          x <- optimized_params[j,]
           tegetege <- rule_config$fitness_function(
             x, parameters,
-            scenario_organization = setting[i, 1],
-            scenario = setting[i, 2],
-            start = setting[i, 3],
-            end = setting[i, 4],
+            scenario_organization = setting[i,1],
+            scenario = setting[i,2],
+            start = setting[i,3],
+            end = setting[i,4],
             rule = rule
           )
           tegetege$scenario <- setting[i,5]
@@ -839,10 +753,10 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
 
     all_history <- do.call(rbind,history_list)
 
-  write.csv(all_history, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_error/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
+  write.csv(all_history, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
 }
 
-camp_default_optimized_func <- function(rule){
+comp_default_optimized_func <- function(rule){
   rfb_config <- list(para_numb = 3,
                      default_params = c(m = if (parameters$k_von < 0.2) 0.95
                                         else if (parameters$k_von < 0.32) 0.9
@@ -873,16 +787,16 @@ camp_default_optimized_func <- function(rule){
   # ルールごとの設定
   rule_config <- switch(rule,
                         "rfb_rule" = rfb_config,
-                        "ICES_average" = rfb_config,
+                        "rfb_Cave" = rfb_config,
                         "type2_rule" = type2_config,
-                        "type2_rule_length" = type2_config,
+                        "type2_f" = type2_config,
                         "chr_rule" = rfb_config,
                         stop("Unknown rule"))
 
   para_numb <- rule_config$para_numb
   default_params <- rule_config$default_params
 
-  all_history <- read.csv(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_error/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"))
+  all_history <- read.csv(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"))
   # original result の抽出
   all_original_result <- t(sapply(seq_len(nrow(setting)),function(i){
     filtered <- subset(all_history,scenario == setting[i,5] &
@@ -894,14 +808,14 @@ camp_default_optimized_func <- function(rule){
   # performance and parameters of optimized
   all_GA_result <- sapply(1:nrow(setting),function(i){
     filtered <- all_history[all_history$scenario == setting[i,5] &
-                              all_history$Blim_risk >= 0.95 & all_history$RSB_long >= 1,]
+                            all_history$Blim_risk >= 0.95 & all_history$RSB_long >= 1,]
     max_RC <- max(filtered$RC_long)
     GA_result <- filtered[which(filtered$RC_long == max_RC)[1],]
   }) %>% t()
 
   optimized_result <- rbind(cbind(name = "origin",all_original_result),cbind(name = "optimized",all_GA_result))
 
-  write.csv(optimized_result, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_error/",parameters$fish,"/GA/optimized_result_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
+  write.csv(optimized_result, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/optimized_result_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
 }
 
 all_ga_func <- function(stock_data,rule){
@@ -942,10 +856,10 @@ func <- function(parameters,
 
     # ここからGA
   }else{
-    GA_result_type2_rule <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "type2_rule")
     GA_result_rfb_rule <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "rfb_rule")
-    GA_result_type2_rule_length <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "type2_rule_length")
-    GA_result_ICES_average <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "ICES_average")
+    GA_result_type2_rule <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "type2_rule")
+    GA_result_rfb_Cave <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "rfb_Cave")
+    GA_result_type2_f <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "type2_f")
     GA_result_chr <- GA_result(parameters,scenario_organization,scenario,start,end,rule = "chr_rule")
   }}
 
@@ -971,137 +885,271 @@ candidate_rule <- function(parameters,rule){
     }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
       m_default <- 0.5
     }
-
     default_candidate <- matrix(NA,22,(8+para_numb))
     default_candidate[,1] <- c(rep("origin",11),rep("candidate",11))
     default_candidate[,2] <- rep(c(setting[,5]),2)
-
     result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
                                                                             scenario_organization = setting[i,1],
                                                                             scenario = setting[i,2],
                                                                             start = setting[i,3],
                                                                             end = setting[i,4],
-                                                                            rule)[18:23])})
+                                                                            rule)[10:15])})
     default_candidate[1:11,3:8] <- t(result_origin)
-
     colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
     default_candidate[,9:(8+para_numb)] <- matrix(c(m_default,0.4,0.75),nrow = 22,ncol = para_numb,byrow = TRUE)
-
 
     # the performance with candidate parameters
     result_candidate <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
                                                                                scenario_organization = setting[i,1],
-                                                                               scenario = setting[i, 2],
+                                                                               scenario = setting[i,2],
                                                                                start = setting[i,3],
                                                                                end = setting[i,4],
                                                                                rule,
                                                                                m = m_default,
                                                                                tau = candidates_tau[i],
-                                                                               theta = 0.75)[1:6])})
-
+                                                                               theta = 0.75)[2:7])})
     default_candidate[12:22,3:8] <- t(result_candidate)
-
     default_candidate[12:22,9:(8+para_numb)] <- cbind(rep(m_default,11),candidates_tau,rep(0.75,11))
   }
 
   if(rule == "type2_rule"){
     para_numb <- 5
-
     default_candidate <- matrix(NA,22,(8+para_numb))
     default_candidate[,1] <- c(rep("origin",11),rep("candidate",11))
     default_candidate[,2] <- rep(c(setting[,5]),2)
-
     result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
                                                                             scenario_organization = setting[i,1],
                                                                             scenario = setting[i,2],
                                                                             start = setting[i,3],
                                                                             end = setting[i,4],
-                                                                            rule)[18:23])})
+                                                                            rule)[10:15])})
     default_candidate[1:11,3:8] <- t(result_origin)
-
     colnames(default_candidate) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
     default_candidate[,9:(8+para_numb)] <- matrix(c(0.8,0.7,0.5,0.4,0.4),nrow = 22,ncol = para_numb,byrow = TRUE)
 
     # the performance with candidate parameters
     result_candidate <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
                                                                                scenario_organization = setting[i,1],
-                                                                               scenario = setting[i, 2],
+                                                                               scenario = setting[i,2],
                                                                                start = setting[i,3],
                                                                                end = setting[i,4],
                                                                                rule,
                                                                                Btarget = candidates_BT[i],
                                                                                Blimit = 0.7,
-                                                                               delta1 = candidates_delta1[i],
+                                                                               delta1 = 0.5,
                                                                                delta2 = 0.4,
-                                                                               delta3 = 0.4)[1:6])})
-
+                                                                               delta3 = 0.4)[2:7])})
     default_candidate[12:22,3:8] <- t(result_candidate)
-    default_candidate[12:22,9:(8+para_numb)] <- cbind(c(rep(0.7,5),rep(0.5,3),rep(0.3,3)),rep(0.7,11),c(rep(0.8,5),rep(0.5,3),rep(0.3,3)),rep(0.4,11),rep(0.4,11))
+    default_candidate[12:22,9:(8+para_numb)] <- cbind(candidates_BT,rep(0.7,11),rep(0.5,11),rep(0.4,11),rep(0.4,11))
   }
   write.csv(default_candidate,paste0("default_candidate_", rule, "_", parameters$fish, ".csv"),row.names = FALSE)
 }
 
-## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-pollack_data <- list(fish = "pollack",
-                     a = 0.0076, # allometry parameter
-                     b = 3.069, # allometry parameter
-                     L_inf = 85.6, # von Bertalanffy growth parameter
-                     L50 = 47.1, # length at 50% maturity
-                     a50 = 4.105405, # age at 50% maturity
-                     t0 = -0.1, # von Bertalanffy growth parameter
-                     k_von = 0.19, # von Bertalanffy growth parameter
-                     waa = c(49.814,241.392,582.492,1035.893,1554.692,2097.365,2632.557,3139.195,3604.783,4023.284,4393.168,4715.836,4994.442,5233.054,5436.088,5607.948), # catch weight at age
-                     alpha = 1.17596948093898, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-                     beta = 90.9090909090909,
-                     F_initial = 0.1)
+stock_data_func <- function(stock_name,ID,h_value=0.75){
 
-## Plaice (Pleuronectes platessa; ple-celt) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-plaice_data <- list(fish = "plaice",
-                    a = 0.011, # allometry parameter
-                    b = 2.958, # allometry parameter
-                    L_inf = 48, # von Bertalanffy growth parameter
-                    L50 = 22.9, # length at 50% maturity
-                    a50 = 2.71883984682675, # age at 50% maturity
-                    t0 = -0.1, # von Bertalanffy growth parameter
-                    k_von = 0.23, # von Bertalanffy growth parameter
-                    waa = c(43.213,115.821,211.207,316.100,420.459,517.961,605.297,681.247,745.897,800.065,844.912,881.708,911.687), # catch weight at age
-                    alpha = 7.57463532506252, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-                    beta = 90.9090909090909,
-                    F_initial = 0.1)
+  ## downloaded from https://raw.githubusercontent.com/shfischer/GA_MSE_cat456/refs/heads/cat456/input/stocks.csv
+  stock_data <- read_csv("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/stocks.csv")
 
-## Thornback ray (Raja clavata; rjc.27.afg) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-thornbackray_data <- list(fish = "thornbackray",
-                          a = 0.0024, # allometry parameter
-                          b = 3.2653, # allometry parameter
-                          L_inf = 139.5, # von Bertalanffy growth parameter
-                          L50 = 71.8, # length at 50% maturity
-                          a50 = 6.13, # age at 50% maturity
-                          t0 = -1.84, # von Bertalanffy growth parameter
-                          k_von = 0.09, # von Bertalanffy growth parameter
-                          waa = c(212.11,475.99,864.24,1374.08,1995.14,2712.56,3509.27,4367.62,5270.52,6202.15,7148.29,8096.61,9036.59,9959.56,10858.51,11727.97,12563.80,13363.03,14123.73,14844.76,15525.71,16166.73,16768.44,17331.79,17858.01,18348.55,18804.97,19228.94,19622.18,19986.42,20323.39,20634.78), # catch weight at age
-                          alpha = 0.0742227910250102, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-                          beta = 90.9090909090909,
-                          F_initial = 0.1)
+  #'
+  #' define empirical & biological functions
+  #'
 
-## Anchovy (Engraulis encrasicolus; ane-pore) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
-anchovy_data <- list(fish = "anchovy",
-                     a = 0.005, # allometry parameter
-                     b = 3.107, # allometry parameter
-                     L_inf = 23, # von Bertalanffy growth parameter
-                     L50 = 16.8, # length at 50% maturity
-                     a50 = 2.87942028154115, # age at 50% maturity
-                     t0 = -0.1, # von Bertalanffy growth parameter
-                     k_von = 0.44, # von Bertalanffy growth parameter
-                     waa = c(15.783,32.063,47.049,58.866,67.455,73.414,77.436), # catch weight at age
-                     alpha = 95.9169322826894, # Beverton-Holt recruitment parameter (R=alpha*S/(beta+S))
-                     beta = 90.9090909090909,
-                     F_initial = 1)
+  VG_growth <- function(t, k, Linf, t0=-0.1){
+    Linf * (1-exp(-k*(t-t0)))
+  }
+
+  VG_growth_inv <- function(L, k, Linf, t0 = -0.1) {
+    t0 - (1 / k) * log(1 - L / Linf)
+  }
+
+  # a_max is defined as the age L=0.95Linf
+  get_amax <- function(t0, k){
+    ceiling(t0 - log(0.05)/k)
+  }
+
+  # length weight relationship
+  LWR <- function(L, a, b){
+    a * L ^ b
+  }
+
+  # empirical K
+  get_k <- function(Linf){
+    3.15 * Linf ^ (-0.64)
+  }
+
+  # empirial L50
+  get_L50 <- function(Linf){
+    0.72 * Linf ^ 0.93
+  }
+
+  # Gislason M
+  gislason_2M <- function(L, Linf, k){
+    log_M <- 0.55 - 1.61 * log(L) + 1.44 * log(Linf) + log(k)
+    exp(log_M)
+  }
+
+  # logistic maturity
+  get_maturity <- function(age, a50, t95 = 1, tsym = 1){
+
+    mature_rate <- numeric(length(age))
+
+    mature_rate[age < (a50-5)] <- 0 # too young
+    half_age <- (age >= (a50-5)) & (age <= (a50+5))
+    mature_rate[half_age] <- tsym/(1+19^((a50-age[half_age])/t95))
+    mature_rate[age > (a50+5)] <- tsym # full matured
+
+    return(mature_rate)
+  }
+
+  # a50 = first age of full selectivity
+  # asymptotic selectivity: sr = 5000, sl =1
+  get_selex <- function(age, sl=1, sr=5000, t1=NULL, a50=NULL, t95=1){
+    if(is.null(t1) && !is.null(a50)) t1 <- a50 + t95
+    selex_vec <- numeric(length(age))
+    selex_vec[ age < t1 ] <- 2^(-((age[age < t1]-t1)/sl)^2)
+    selex_vec[ age >= t1 ] <- 2^(-((age[age >= t1]-t1)/sr)^2)
+    return(selex_vec)
+  }
+
+  #'
+  #' input: stock_data (including  a, b, linf, l50, a50, t0, k)
+  #'                   (dat1 <- stock_data[1,])
+  #' output: Length, maturity, weight, mortality at age
+  #'
+
+  create_biodata <- function(dat1, min_age = 1, t0_default = -0.1,
+                             spwn=0, fish=0.5, midyear = 0.5 # in lhEql, midyear is not working
+  ){
+
+    if(is.na(dat1$t0)) dat1$t0 <- t0_default
+
+    max_age <- get_amax(dat1$t0, dat1$k)
+    age_names <- min_age:max_age
+    age_vector <- 1:length(age_names)
+
+    # length at age for spawning
+    laa_sp     <- VG_growth(age_names + spwn, dat1$k, dat1$linf, dat1$t0)
+    # length at age for catch
+    laa_catch  <- VG_growth(age_names + fish, dat1$k, dat1$linf, dat1$t0)
+    # length at age for M
+    laa_M      <- VG_growth(age_names + midyear, dat1$k, dat1$linf, dat1$t0)
+
+    # weight at age for spawning biomass
+    waa_sp  <- LWR(laa_sp, dat1$a, dat1$b)
+    # weight at age for catch
+    waa_catch  <- LWR(laa_catch, dat1$a, dat1$b)
+
+    # M at age
+    M  <- gislason_2M(laa_M, dat1$linf, dat1$k)
+    # Maturity at age
+    maa <- get_maturity(age_names, dat1$a50)
+    #maa[min_age] <- 0
+    # selectivity at age
+    saa <- get_selex(age_names + fish, a50=dat1$a50)
+
+    return(tibble(age=age_names, waa_catch, waa=waa_sp, M, maa, saa, laa_M, laa_catch, laa_sp))
+  }
+
+  #'
+  #' input: object from stock_data
+  #' output: Various reference points and SR parameters
+  #'
+
+  calc_refpoints <- function(biopars, h=h_value, S0=1000){
+
+    # given h and R0, calculate S0, a, b
+    objfun <- function(x) (frasyr::get.ab.bh(h, exp(x), biopars)$S0-S0)
+    R0 <- uniroot(f=objfun, interval=c(-30,30), maxiter = 1000, tol=1e-12)  # search R0 under S0=1000
+    srpars <- frasyr::get.ab.bh(h, exp(R0$root), biopars) # get SR parameter
+    ## in frasyr, BH = a * x/(1 + b * x)
+    ## in ICES, BH=alpha * x/(beta + x)
+    srpars$alpha <- srpars$a/srpars$b
+    srpars$beta  <- 1/srpars$b
+
+    # calculate deterministic MSY RPs
+    refpts <- frasyr::calc_steepness(SR="BH", srpars, M=biopars$M, waa=biopars$waa, maa=biopars$maa,
+                                     waa_catch=biopars$waa_catch,F0.1.init=1,
+                                     plus_group=TRUE, faa=biopars$saa, Pope=FALSE)
+    refpts$Fmsy <- mean(biopars$saa * refpts$Fmsy2F)
+    res <- bind_cols(refpts,as_tibble(srpars[c("alpha","beta")]))
+    res
+  }
+
+  ## do calculation
+
+  ## fill NA data
+  stock_data <- stock_data %>%
+    mutate(t0 = ifelse(is.na(t0), -0.1, t0)) %>%
+    mutate(k=ifelse(is.na(k), get_k(linf), k),
+           l50=ifelse(is.na(l50), get_L50(linf), l50),
+           a50=ifelse(is.na(a50), VG_growth_inv(l50, k, linf, t0), a50))
+
+  ## apply craeate biodata and calc_refpoints
+  biopars_all <- map(1:nrow(stock_data), function(x){
+    biodata <- create_biodata(stock_data[x,], spwn=0, fish=0.5, midyear = 0)     # midyear should be 0
+    refdata <- calc_refpoints(biodata)
+    return(list(biodata=biodata, refdata=refdata))
+  })
+
+  ## check parameters used for calculation
+
+  # saa is different but relative values are same
+  saa_local <- map(biopars_all, function(x) x$biodata$saa)
+
+  # other biological parameters are same
+  waa_local <- map(biopars_all, function(x) x$biodata$waa)
+  maa_local <- map(biopars_all, function(x) x$biodata$maa)
+  m_local <- map(biopars_all, function(x) x$biodata$M)
+
+  ## downloaded from https://github.com/shfischer/GA_MSE_cat456/blob/cat456/input/brps.rds
+  brps <- readRDS("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/brps_new.rds")
+  Fcrash <- brps[[ID]]@refpts["crash","harvest"]@.Data[1]
+
+  data_ID <- stock_data[stock_data$stock == ID,]
+  seq <- data_ID$seq
+  biodata <- biopars_all[[seq]]$biodata
+  refdata <- biopars_all[[seq]]$refdata
+  Fcrash <- brps[[ID]]@refpts["crash","harvest"]@.Data[1]
+  Fcrash2F <- Fcrash*refdata$Fmsy2F/refdata$Fmsy
+
+  stock_params <- list(fish = stock_name,
+                       a = data_ID$a,
+                       b = data_ID$b,
+                       L_inf = data_ID$linf,
+                       L50 = data_ID$l50,
+                       a50 = data_ID$a50,
+                       t0 = data_ID$t0,
+                       k_von = data_ID$k,
+                       saa = biodata$saa,
+                       waa = biodata$waa,
+                       waa_catch = biodata$waa_catch,
+                       maa = biodata$maa,
+                       M = biodata$M,
+                       laa = biodata$laa_catch,
+                       laa_M = biodata$laa_M,
+                       laa_sp = biodata$laa_sp,
+                       na = length(biodata$age),
+                       alpha = refdata$alpha,
+                       beta = refdata$beta,
+                       SB0 = refdata$SB0,
+                       B0 = refdata$B0,
+                       SBmsy = refdata$SBmsy,
+                       Bmsy = refdata$Bmsy,
+                       MSY = refdata$MSY,
+                       Fmsy2F = refdata$Fmsy2F,
+                       Fmsy = refdata$Fmsy,
+                       Fcrash2F = Fcrash2F,
+                       Fcrash = Fcrash)
+  return(stock_params)
+}
+
+rule_set <- c("rfb_rule","type2_rule","rfb_Cave","type2_f","chr_rule")
 
 setting <- data.frame(
   V1 = c("ICES","ICES","Japan","Japan","Japan","Japan","Japan","Japan","Japan","Japan","Japan"),
   V2 = c("one_way","roller_coaster","","","","","","","","",""),
-  V3 = c(0,0,0.25,0.5,0.75,0.25,0.5,0.75,0.25,0.5,0.75),
-  V4 = c(0,0,0.25,0.25,0.25,0.5,0.5,0.5,0.75,0.75,0.75),
-  V5 = c("one_way","roller_coaster","025_025","05_025","075_025","025_05","05_05","075_05","025_075","05_075","075_075"),
+  V3 = c(0,0,0.5,1.0,1.5,0.5,1.0,1.5,0.5,1.0,1.5),
+  V4 = c(0,0,0.5,0.5,0.5,1.0,1.0,1.0,1.5,1.5,1.5),
+  V5 = c("one_way","roller_coaster","05_05","10_05","15_05","05_10","10_10","15_10","05_15","10_15","15_15"),
   stringsAsFactors = FALSE
 )
