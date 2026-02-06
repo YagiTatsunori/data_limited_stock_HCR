@@ -4,7 +4,7 @@ library(dplyr)
 library(ggplot2)
 library(rlang)
 library(purrr)
-source("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/functions.R")
+source("./functions.R")
 
 rule_result <- function(rule){
   pollack <- read.csv(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/pollack/GA/optimized_result_",rule,"_pollack.csv"))
@@ -152,3 +152,4 @@ calc_ratio <- function(method){
 }
 
 methods <- c("rfb rule","type2 rule","rfb + c\u0304","type2 + f","chr rule")
+
