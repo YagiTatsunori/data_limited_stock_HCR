@@ -74,7 +74,7 @@ plot_res <- function(result,ylab_name,xlim_start,ylim_end,filename){
           legend.title = element_text(size = 20),
           legend.key.spacing.y = unit(1, 'lines'),
           axis.ticks.length = unit(0.3,"cm"))
-  ggsave(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_BMSY/Figs_",parameters$fish,"/",filename), width = 170, height = 170, units = "mm", dpi = 300)
+  ggsave(paste0("./Figs_",parameters$fish,"/",filename), width = 170, height = 170, units = "mm", dpi = 300)
 }
 
 # plot the simulation results
