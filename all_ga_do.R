@@ -36,5 +36,5 @@ for(i in seq_len(nrow(stocks))){
   run_ga_for_stock(stock_name = stocks$stock_name[i],
                    stock_id   = stocks$stock_id[i])}
 
-source("./Fig4.R")
-source("./Fig5_7.R")
+source("./Fig5.R")
+source("./Fig6_8.R")
