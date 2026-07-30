@@ -33,5 +33,5 @@ ggplot(data, aes(x = I)) +
         legend.text = element_text(size = 25),legend.title = element_text(size = 25),
         legend.key.spacing.y = unit(1,'lines'),axis.ticks.length = unit(0.3,"cm"),
         plot.title = element_text(size = 30)) + ggtitle("")
-ggsave(paste0("./Figs2.jpg"),
+ggsave(paste0("./Fig2.jpg"),
        width = 340, height = 170, units = "mm", dpi = 300)
