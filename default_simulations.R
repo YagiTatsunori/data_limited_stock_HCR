@@ -14,7 +14,7 @@ library(ggforce)
 library(frasyr)
 library(ggh4x)
 source("./functions.R")
-source("./FigS1.R")
+source("./Fig1.R")
 source("./Fig2.R")
 source("./Fig3.R")
 
@@ -50,7 +50,7 @@ simulation_func <- function(stock){
   MSE_output <- results
   # MSE_output <- readRDS("./results_Pollack.RDS")
   Fig2_func(MSE_output = MSE_output,parameters = parameters)
-  if(stock[1][[1]] == "Pollack"){FigS1_func(parameters = parameters)}
+  if(stock[1][[1]] == "Pollack"){Fig1_func(parameters = parameters)}
 }
 
 # pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/GA_MSE_cat456/blob/cat456/input/stocks.csv
