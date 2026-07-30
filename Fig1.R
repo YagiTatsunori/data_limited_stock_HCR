@@ -1,4 +1,4 @@
-FigS1_func <- function(parameters){
+Fig1_func <- function(parameters){
   waa <- parameters$waa
   waa_catch <- parameters$waa_catch
   alpha <- parameters$alpha
