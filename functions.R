@@ -184,17 +184,18 @@ scenario_and_management <- function(parameters,
   # custom=NULL: パラメータはデフォルト
   if(is.null(custom)){
     Btarget <- 0.8;Blimit <- 0.7;delta1 <- 0.5;delta2 <- 0.4;delta3 <- 0.4;tau <- 0.4;theta <- 0.75
-    if(k_von < 0.2){
-      m <- 0.95
-    }else if(0.2 <= k_von & k_von < 0.32){
-      m <- 0.9
-    }else if(0.32 <= k_von & k_von <= 0.45){
-      m <- 0.5
-    }
+    if(rule == "rfb_rule" || rule == "rfb_Cave"){
+      if(k_von < 0.2){
+        m <- 0.95
+      }else{
+        m <- 0.9
+      }}
+    else if(rule == "chr_rule"){
+      m <- 0.5}
   }else if(custom==1){
     Btarget <- Btarget;Blimit <- Blimit;delta1 <- delta1;delta2 <- delta2;delta3 <- delta3;tau <- tau;theta <- theta;m <- m
   }
-      if(scenario_organization == "ICES"){
+  if(scenario_organization == "ICES"){
         ny_0.5Fmsy <- 75 # year for management to converge in equivalent
         ny_history <- 25 # year for management to converge in equivalent
         ny_before <- ny_0.5Fmsy+ny_history # years before management
@@ -643,8 +644,7 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
 
   rfb_config <- list(para_numb = 3,
                      default_params = c(m = if (parameters$k_von < 0.2) 0.95
-                                        else if (parameters$k_von < 0.32) 0.9
-                                        else 0.5,
+                                        else 0.9,
                                         tau = 0.4,theta = 0.75),
                      specified = c("m","tau","theta"),
                      suggestion_matrix = function(popsize,para_numb,default_params){
@@ -654,6 +654,18 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
                        rbind(specified_individuals,initial_population,sequences)},fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
                        scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
                                                m = x[1],tau = x[2],theta = x[3])})
+
+  chr_config <- list(para_numb = 3,
+                     default_params = c(m = 0.5,
+                                        tau = 0.4,theta = 0.75),
+                     specified = c("m","tau","theta"),
+                     suggestion_matrix = function(popsize,para_numb,default_params){
+                       specified_individuals <- matrix(rep(unlist(default_params),(popsize-10)*0.1),nrow = (popsize-10)*0.1,byrow = TRUE)
+                       set.seed(1);initial_population <- matrix(runif((popsize-10)*0.9*para_numb),nrow = (popsize-10)*0.9)
+                       sequences <- matrix(rep(seq(0.1,1,by=0.1),para_numb),nrow = 10)
+                       rbind(specified_individuals,initial_population,sequences)},fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
+                         scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
+                                                 m = x[1],tau = x[2],theta = x[3])})
 
   type2_config <- list(para_numb = 5,
                        default_params = c(Btarget = 0.8,Blimit = 0.7, delta1 = 0.5,delta2 = 0.4,delta3=0.4),
@@ -672,7 +684,7 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
                           "rfb_Cave" = rfb_config,
                           "type2_rule" = type2_config,
                           "type2_f" = type2_config,
-                          "chr_rule" = rfb_config,
+                          "chr_rule" = chr_config,
                           stop("Unknown rule"))
 
     para_numb <- rule_config$para_numb
@@ -738,50 +750,8 @@ GA_result <- function(parameters,scenario_organization,scenario,start,end,rule){
 
     all_history <- do.call(rbind,history_list)
 
-  write.csv(all_history, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
-}
-
-comp_default_optimized_func <- function(rule){
-  rfb_config <- list(para_numb = 3,
-                     default_params = c(m = if (parameters$k_von < 0.2) 0.95
-                                        else if (parameters$k_von < 0.32) 0.9
-                                        else 0.5,
-                                        tau = 0.4,theta = 0.75),
-                     specified = c("m","tau","theta"),
-                     suggestion_matrix = function(popsize,para_numb,default_params){
-                       specified_individuals <- matrix(rep(unlist(default_params),(popsize-10)*0.1),nrow = (popsize-10)*0.1,byrow = TRUE)
-                       initial_population <- matrix(runif((popsize-10)*0.9*para_numb),nrow = (popsize-10)*0.9)
-                       sequences <- matrix(rep(seq(0.1,1,by=0.1),para_numb),nrow = 10)
-                       rbind(specified_individuals,initial_population,sequences)},
-                     fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
-                       scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
-                                               m = x[1],tau = x[2],theta = x[3])})
-
-  type2_config <- list(para_numb = 5,
-                       default_params = c(Btarget = 0.8,Blimit = 0.7, delta1 = 0.5,delta2 = 0.4,delta3=0.4),
-                       specified = c("Btarget","Blimit","delta1","delta2","delta3"),
-                       suggestion_matrix = function(popsize,para_numb,default_params){
-                         specified_individuals <- matrix(rep(unlist(default_params),(popsize-10)*0.1),nrow = (popsize-10)*0.1,byrow = TRUE)
-                         initial_population <- matrix(runif((popsize-10)*0.9*para_numb),nrow = (popsize-10)*0.9)
-                         sequences <- matrix(rep(seq(0.1,1,by=0.1),para_numb),nrow = 10)
-                         rbind(specified_individuals,initial_population,sequences)},
-                       fitness_function = function(x,parameters,scenario_organization,scenario,start,end,rule){
-                         scenario_and_management(parameters,GA = 1,custom = 1,scenario_organization,scenario,start,end,rule,
-                                                 Btarget = x[1],Blimit = x[2],delta1 = x[3],delta2 = x[4],delta3 = x[5])})
-
-  # ルールごとの設定
-  rule_config <- switch(rule,
-                        "rfb_rule" = rfb_config,
-                        "rfb_Cave" = rfb_config,
-                        "type2_rule" = type2_config,
-                        "type2_f" = type2_config,
-                        "chr_rule" = rfb_config,
-                        stop("Unknown rule"))
-
-  para_numb <- rule_config$para_numb
-  default_params <- rule_config$default_params
-
-  all_history <- read.csv(paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/generation_populations_", rule,"_",parameters$fish,".csv"))
+  write.csv(all_history, paste0("./generation_populations_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
+  
   # original result の抽出
   all_original_result <- t(sapply(seq_len(nrow(setting)),function(i){
     filtered <- subset(all_history,scenario == setting[i,5] &
@@ -789,24 +759,45 @@ comp_default_optimized_func <- function(rule){
     max_RC <- max(filtered$RC_long)
     filtered[which.max(filtered$RC_long),]
   }))
-
+  
   # performance and parameters of optimized
   all_GA_result <- sapply(1:nrow(setting),function(i){
     filtered <- all_history[all_history$scenario == setting[i,5] &
-                            all_history$Blim_risk >= 0.95 & all_history$RSB_long >= 1,]
+                              all_history$Blim_risk >= 0.95 & all_history$RSB_long >= 1,]
     max_RC <- max(filtered$RC_long)
     GA_result <- filtered[which(filtered$RC_long == max_RC)[1],]
   }) %>% t()
-
+  
   optimized_result <- rbind(cbind(name = "origin",all_original_result),cbind(name = "optimized",all_GA_result))
-
-  write.csv(optimized_result, paste0("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/",parameters$fish,"/GA/optimized_result_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
+  
+  write.csv(optimized_result, paste0("./optimized_result_", rule,"_",parameters$fish,".csv"),row.names = FALSE)
 }
 
 all_ga_func <- function(stock_data,rule){
   # 保存用リスト
   generation_populations <- list()
   GA_result(parameters,scenario_organization,scenario,start,end,rule = rule)
+}
+
+run_ga_for_stock <- function(stock_name,stock_id){
+  
+  # biological parameters
+  parameters <- stock_data_func(stock_name, stock_id)
+  
+  # rule list (from params_all_ga)
+  rule_set <- params_all_ga$level
+  
+  for(rule in rule_set){
+    
+    # reset global container for GA generations
+    generation_populations <<- list()
+    
+    # run GA (side effects: CSV / RDS output)
+    GA_result(parameters,scenario_organization,scenario,start,end,rule = rule)
+    
+  }
+  
+  invisible(NULL)
 }
 
 func <- function(parameters,
@@ -860,80 +851,10 @@ Generation_Time <- function(parameters){
   return(G)
 }
 
-adjusted_rule <- function(parameters,rule){
-  if(rule == "rfb_rule"){
-    para_numb <- 3
-    if(parameters$k_von < 0.2){
-      m_default <- 0.95
-    }else if(0.2 <= parameters$k_von & parameters$k_von < 0.32){
-      m_default <- 0.9
-    }else if(0.32 <= parameters$k_von & parameters$k_von <= 0.45){
-      m_default <- 0.5
-    }
-    default_adjusted <- matrix(NA,22,(8+para_numb))
-    default_adjusted[,1] <- c(rep("default",11),rep("adjusted",11))
-    default_adjusted[,2] <- rep(c(setting[,5]),2)
-    result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
-                                                                            scenario_organization = setting[i,1],
-                                                                            scenario = setting[i,2],
-                                                                            start = setting[i,3],
-                                                                            end = setting[i,4],
-                                                                            rule)[10:15])})
-    default_adjusted[1:11,3:8] <- t(result_origin)
-    colnames(default_adjusted) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","m","tau","theta")
-    default_adjusted[,9:(8+para_numb)] <- matrix(c(m_default,0.4,0.75),nrow = 22,ncol = para_numb,byrow = TRUE)
-
-    # the performance with candidate parameters
-    result_adjusted <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
-                                                                               scenario_organization = setting[i,1],
-                                                                               scenario = setting[i,2],
-                                                                               start = setting[i,3],
-                                                                               end = setting[i,4],
-                                                                               rule,
-                                                                               m = m_default,
-                                                                               tau = adjusted_tau[i],
-                                                                               theta = 0.75)[2:7])})
-    default_adjusted[12:22,3:8] <- t(result_adjusted)
-    default_adjusted[12:22,9:(8+para_numb)] <- cbind(rep(m_default,11),adjusted_tau,rep(0.75,11))
-  }
-
-  if(rule == "type2_rule"){
-    para_numb <- 5
-    default_adjusted <- matrix(NA,22,(8+para_numb))
-    default_adjusted[,1] <- c(rep("default",11),rep("adjusted",11))
-    default_adjusted[,2] <- rep(c(setting[,5]),2)
-    result_origin <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = 1,custom = NULL,
-                                                                            scenario_organization = setting[i,1],
-                                                                            scenario = setting[i,2],
-                                                                            start = setting[i,3],
-                                                                            end = setting[i,4],
-                                                                            rule)[10:15])})
-    default_adjusted[1:11,3:8] <- t(result_origin)
-    colnames(default_adjusted) <- c("name","scenario","RSB_short","RC_short","RSB_long","RC_long","AAV","Blim_risk","Btarget","Blimit","delta1","delta2","delta3")
-    default_adjusted[,9:(8+para_numb)] <- matrix(c(0.8,0.7,0.5,0.4,0.4),nrow = 22,ncol = para_numb,byrow = TRUE)
-
-    # the performance with candidate parameters
-    result_adjusted <- sapply(1:11,function(i){unlist(scenario_and_management(parameters,GA = NULL,custom = 1,
-                                                                               scenario_organization = setting[i,1],
-                                                                               scenario = setting[i,2],
-                                                                               start = setting[i,3],
-                                                                               end = setting[i,4],
-                                                                               rule,
-                                                                               Btarget = adjusted_BT[i],
-                                                                               Blimit = 0.7,
-                                                                               delta1 = 0.5,
-                                                                               delta2 = 0.4,
-                                                                               delta3 = 0.4)[2:7])})
-    default_adjusted[12:22,3:8] <- t(result_adjusted)
-    default_adjusted[12:22,9:(8+para_numb)] <- cbind(adjusted_BT,rep(0.7,11),rep(0.5,11),rep(0.4,11),rep(0.4,11))
-  }
-  write.csv(default_adjusted,paste0("default_adjusted_", rule, "_", parameters$fish, ".csv"),row.names = FALSE)
-}
-
 stock_data_func <- function(stock_name,ID,h_value=0.75){ # stocks.csvからbiological parametersやreference pointsを計算する関数
 
   ## downloaded from https://raw.githubusercontent.com/shfischer/GA_MSE_cat456/refs/heads/cat456/input/stocks.csv
-  stock_data <- read_csv("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/stocks.csv")
+  stock_data <- read_csv("./stocks.csv")
 
   #'
   #' define empirical & biological functions
@@ -1087,7 +1008,7 @@ stock_data_func <- function(stock_name,ID,h_value=0.75){ # stocks.csvからbiolo
   m_local <- map(biopars_all, function(x) x$biodata$M)
 
   ## downloaded from https://github.com/shfischer/GA_MSE_cat456/blob/cat456/input/brps.rds
-  brps <- readRDS("C:/Users/00008252/OneDrive - 国立研究開発法人 水産研究・教育機構/デスクトップ/論文提出用/data_limited_HCR_BMSY/brps_new.rds")
+  brps <- readRDS("./brps_new.rds")
   Fcrash <- brps[[ID]]@refpts["crash","harvest"]@.Data[1]
 
   data_ID <- stock_data[stock_data$stock == ID,]

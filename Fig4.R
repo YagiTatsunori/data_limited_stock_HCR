@@ -1,82 +1,69 @@
-Fig4_func <- function(MSE_output,parameters,scale_upper,scale_down,title_name){
-  FIG_4_data <- matrix(0,30,4)
-  FIG_4_data[,1] <- parameters$fish
-  FIG_4_data[,2] <- c(rep(rule_set[1],6),rep(rule_set[2],6),rep(rule_set[3],6),rep(rule_set[4],6),rep(rule_set[5],6))
-  FIG_4_data[,3] <- rep(c("RC_long","RC_short","RSB_long","RSB_short","AAV","Blim"),5)
-  colnames(FIG_4_data) <- c("fish","method","index","value")
-  for(i in 1:5){
-    mean_RC_long <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[13]]))
-    mean_RC_short <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[11]]))
-    mean_RSB_long <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[12]]))
-    mean_RSB_short <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[10]]))
-    mean_AAV <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[14]]))
-    mean_Blim <- mean(sapply(1:3,function(k) MSE_output[[k]][[i]][[15]]))
-    FIG_4_data[(1+(6*(i-1))):(6*i),4] <- rbind(mean_RC_long,mean_RC_short,mean_RSB_long,mean_RSB_short,mean_AAV,mean_Blim)
-  }
-  FIG4_data <- as.data.frame(FIG_4_data)
-  FIG4_data$value <- as.numeric(FIG4_data$value)
-  FIG4_data$index <- factor(FIG4_data$index,levels = c("Blim","AAV","RSB_short","RSB_long","RC_short","RC_long"))
-  FIG4_data$method <- factor(FIG4_data$method,levels = c(rule_set[5],rule_set[4],rule_set[3],rule_set[2],rule_set[1]))
-  write.csv(t(FIG4_data),paste0("./Figs_",parameters$fish,"/Fig4_", parameters$fish,".csv"))
-  
-  FIG4_data <- FIG4_data %>% mutate(method = recode(method,
-                                                    "rfb_rule" = "rfb rule",
-                                                    "type2_rule" = "type2 rule",
-                                                    "rfb_Cave" = "rfb + c\u0304",
-                                                    "type2_f" = "type2 + f",
-                                                    "chr_rule" = "chr rule"))
-  
-  rule_set <- recode(rule_set,
-                     "rfb_rule" = "rfb rule",
-                     "type2_rule" = "type2 rule",
-                     "rfb_Cave" = "rfb + c\u0304",
-                     "type2_f" = "type2 + f",
-                     "chr_rule" = "chr rule")
-  
-  p <- ggplot(data = FIG4_data[FIG4_data$index != "AAV" & FIG4_data$index != "Blim",],aes(x = index,y = value,group = method)) +
-    geom_hline(yintercept = 1,linetype = "solid",linewidth = 2,color = "black") +
-    scale_colour_manual(values = c("rfb rule" = "red","rfb + c\u0304" = "orange","type2 rule" = "blue","type2 + f" = "cyan3","chr rule" = "limegreen"),
-                        guide  = guide_legend(reverse = TRUE),name = NULL)
-
-  for (method in rev(rule_set)){
-    p <- p +
-      geom_line(data = FIG4_data[FIG4_data$index != "AAV" & FIG4_data$index != "Blim" & FIG4_data$method == method,],aes(colour = method),linewidth = 2) +
-      geom_point(data = FIG4_data[FIG4_data$index != "AAV" & FIG4_data$index != "Blim" & FIG4_data$method == method,],aes(colour = method),size = 3)
-  }
-  
-  p <- p +
-    coord_flip() +
-    scale_x_discrete(expand = expansion(mult = c(0,0.1))) +
-    scale_y_continuous(expand = expansion(mult = c(0,0.1)),breaks = c(0,1,scale_upper),limits = c(0,scale_upper)) +
-    theme_classic() + labs(x = "",y = "") +
-    theme(plot.title = element_text(hjust = -0.35,vjust = 0,size = 20,color = "black"),
-          legend.position = "none",axis.text = element_text(size = 20,color = "black"),
-          axis.title = element_text(size = 20,color = "black"),
-          axis.line = element_line(colour = "black",linewidth = 1,lineend = "square"),
-          axis.ticks.length = unit(0.3,"cm"))
-  
-  q <- ggplot(data = FIG4_data[FIG4_data$index == "AAV",],aes(x = index,y = value,group = method)) +
-    geom_point(data = FIG4_data[FIG4_data$index == "AAV",],aes(colour = method),size = 4) +
-    scale_colour_manual(values = c("rfb rule" = "red","rfb + c\u0304" = "orange","type2 rule" = "blue","type2 + f" = "cyan3","chr rule" = "limegreen"),
-                        guide  = guide_legend(reverse = TRUE),name = NULL) +
-    coord_flip() +
-    scale_y_continuous(expand = expansion(mult = c(0,0.1)),breaks = c(0,0.5),limits = c(0,scale_down),oob = scales::oob_squish) +
-    theme_classic() + labs(x = expression(), y = "") +
-    theme(plot.title.position = "plot",
-          plot.title = element_text(hjust = 0,vjust = 0,size = 25,color = "black"),
-          legend.position = "none",axis.text = element_text(size = 20,color = "black"),
-          axis.title = element_text(size = 20,color = "black"),
-          axis.line = element_line(colour = "black",linewidth = 1,lineend = "square"),
-          axis.ticks.length = unit(0.3,"cm"))
-  
-  (p/q) +
-    plot_annotation(
-      title = title_name,
-      theme = theme(
-        plot.title = element_text(hjust = 0, vjust = 1, size = 25),
-        plot.margin = margin(5,5,-20,0)
-      )
-    ) +
-    plot_layout(heights = c(6,1))
-  ggsave(paste0("./Figs_",parameters$fish,"/Fig4_",parameters$fish,".jpg"),width = 170,height = 170,units = "mm",dpi = 300)
+rule_result <- function(rule){
+  pollack <- read.csv(paste0("./optimized_result_",rule,"_Pollack.csv"))
+  thornbackray <- read.csv(paste0("./optimized_result_",rule,"_Thornbackray.csv"))
+  plaice <- read.csv(paste0("./optimized_result_",rule,"_Plaice.csv"))
+  anchovy <- read.csv(paste0("./optimized_result_",rule,"_Anchovy.csv"))
+  data <- rbind(pollack,thornbackray,plaice,anchovy)
+  data <- cbind(data[1],scenario = data$scenario,data[3:8])
+  data$method <- rule
+  data[,3:8] <- lapply(data[,3:8], as.numeric)
+  data$stock_name <- c(rep("Pollack",22),rep("Thornbackray",22),rep("Plaice",22),rep("Anchovy",22))
+  return(data)
 }
+
+Fig4_facet <- function(){
+  data_set <- rbind(rule_result(rule_set[1]),rule_result(rule_set[2]),rule_result(rule_set[3]),rule_result(rule_set[4]),rule_result(rule_set[5]))
+  data_set <- data_set %>% mutate(method = recode(method,
+                                                  "rfb_rule" = "rfb rule",
+                                                  "type2_rule" = "type2 rule",
+                                                  "rfb_Cave" = "rfb + c\u0304",
+                                                  "type2_f" = "type2 + f",
+                                                  "chr_rule" = "chr rule"))
+  data_set$scenario <- factor(data_set$scenario,
+                              levels = c("15_15","10_15","05_15",
+                                         "15_10","10_10","05_10",
+                                         "15_05","10_05","05_05",
+                                         "roller_coaster","one_way"))
+  
+  data_set$method <- recode(data_set$method,
+                            "rfb_rule"   = "rfb rule",
+                            "type2_rule" = "type2 rule",
+                            "rfb_Cave"   = "rfb + c̄",
+                            "type2_f"    = "type2 + f",
+                            "chr_rule"   = "chr rule")
+  
+  data_set$Risk <- ifelse(data_set$RSB_long < 1 | data_set$Blim_risk < 0.95,"risk","safe")
+  col_opt <- c("optimized" = "red","origin" = "blue")
+  data_set$method <- factor(data_set$method,levels = c("rfb rule","type2 rule","rfb + c\u0304","type2 + f","chr rule"))
+  data_set$stock_name <- factor(data_set$stock_name,levels = c("Pollack","Thornbackray","Plaice","Anchovy"))
+
+  mean_line <- data_set %>%
+    group_by(stock_name, method, name) %>%
+    summarise(mean_RC = mean(RC_long, na.rm = TRUE),
+              .groups = "drop")
+  
+  p <- ggplot(data_set, aes(x = RC_long, y = scenario)) +
+    geom_vline(data = mean_line,aes(xintercept = mean_RC, colour = name),linetype = "dashed",linewidth = 1) +
+    geom_point(data = subset(data_set, Risk == "safe"),aes(colour = name),shape = 16,size = 4) +
+    geom_point(data = subset(data_set, Risk == "risk"),aes(colour = name),shape = 24,fill = NA,stroke = 1.2,size = 2) +
+    
+    scale_colour_manual(values = col_opt) +
+    facet_grid(stock_name ~ method, scales = "free_y") +
+    scale_x_continuous(expand = expansion(mult = c(0,0.1)),limits = c(0,1.5),breaks = c(0,0.5,1,1.5)) +
+    labs(x = "RC_long",y = "Fishing histories",colour = "opt") +
+    theme_bw() + 
+    theme(strip.background = element_rect(fill = "grey80"),
+          strip.text = element_text(size = 20),legend.position = "none",
+          axis.text = element_text(colour = "black",size = 15),axis.title = element_text(colour = "black",size = 20),
+          axis.line = element_line(colour = "black",linewidth = 1,lineend = "square"),
+          panel.grid.major = element_line(color = "white"),
+          panel.grid.minor = element_line(color = "white"))
+  
+  print(p)
+  
+  ggsave("./Fig4.jpg",plot = p,width = 340,height = 340,units = "mm",dpi = 300)
+}
+methods <- c("rfb rule","type2 rule","rfb + c̄","type2 + f","chr rule")
+stocks  <- c("Pollack","Thornbackray","Plaice","Anchovy")
+
+Fig4_facet()
