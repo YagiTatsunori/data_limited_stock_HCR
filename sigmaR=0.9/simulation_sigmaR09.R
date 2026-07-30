@@ -23,7 +23,7 @@ set.seed(3);epsiron_i <- rnorm(130*sim,0,sd_i) %>% matrix(130,sim,byrow = TRUE)
 set.seed(4);epsiron_r <- rnorm(130*sim,0,sd_r) %>% matrix(130,sim,byrow = TRUE)
 set.seed(5);epsiron_l <- rlnorm(130*sim,0,sd_l) %>% matrix(130,sim)
 
-fig_script <- "../../Fig3.R"
+fig_script <- "../../Fig4.R"
 source(fig_script,local = TRUE)
 directory_name <- getwd()
 
@@ -80,4 +80,4 @@ anchovy_variables <- list(configs$anchovy_variables$stock,
 MSE_output_list <- lapply(results_list, function(x) x$results)
 parameters_list <- lapply(results_list, function(x) x$parameters)
 config_list <- configs
-Fig3_func()
+Fig4_func()
