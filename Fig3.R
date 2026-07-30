@@ -1,4 +1,4 @@
-Fig2_func <- function(MSE_output,parameters){
+Fig3_func <- function(MSE_output,parameters){
   # plot the simulation results
   Fmsy <- parameters$Fmsy2F@.Data[1];MSY <- parameters$MSY@.Data[1];SBmsy <- parameters$SBmsy@.Data[1]
   saa <- parameters$saa
@@ -146,7 +146,7 @@ Fig2_func <- function(MSE_output,parameters){
                                       plot.title = element_text(hjust = 0,vjust = 1,size = 40))) &
         legend_theme & guides(colour = guide_legend(nrow = 1,reverse = TRUE),linetype = "none")
                               
-      ggsave(paste0("./Figs_",parameters$fish,"/FIG2_main_",parameters$fish,".jpg"),
+      ggsave(paste0("./Figs_",parameters$fish,"/FIG3_main_",parameters$fish,".jpg"),
              fig_main,width = 680,height = 510,units = "mm",dpi = 300)
       
       ## 補足資料用 : scenario(i)
@@ -157,7 +157,7 @@ Fig2_func <- function(MSE_output,parameters){
         legend_theme & guides(colour = guide_legend(nrow = 1,reverse = TRUE),
                               linetype = "none")
       
-      ggsave(paste0("./Figs_",parameters$fish,"/FIG2_supplement_",parameters$fish,".jpg"),
+      ggsave(paste0("./Figs_",parameters$fish,"/FIG3_supplement_",parameters$fish,".jpg"),
              fig_sup,width = 340,height = 510,units = "mm",dpi = 300)
       
     } else {
