@@ -61,7 +61,7 @@ Fig4_facet <- function(){
   
   print(p)
   
-  ggsave("./Fig4.jpg",plot = p,width = 340,height = 340,units = "mm",dpi = 300)
+  ggsave("./Fig5.jpg",plot = p,width = 340,height = 340,units = "mm",dpi = 300)
 }
 methods <- c("rfb rule","type2 rule","rfb + c̄","type2 + f","chr rule")
 stocks  <- c("Pollack","Thornbackray","Plaice","Anchovy")
