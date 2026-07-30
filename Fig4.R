@@ -1,4 +1,4 @@
-Fig3_func <- function(){
+Fig4_func <- function(){
   plot_func <- function(stock){
     scale_RSB = stock[3][[1]]
     scale_RC = stock[4][[1]]
@@ -89,5 +89,5 @@ Fig3_func <- function(){
           legend.key.width = unit(3,"cm"),legend.key.height = unit(1,"cm"),
           legend.text = element_text(size = 20),legend.spacing.x = unit(1,"cm"))
   
-  ggsave(paste0("./FIG3.jpg"),final_x_axis,width = 340,height = 340,units = "mm",dpi = 300)
+  ggsave(paste0("./FIG4.jpg"),final_x_axis,width = 340,height = 340,units = "mm",dpi = 300)
 }
