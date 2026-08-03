@@ -19,7 +19,7 @@ Fig1_func <- function(parameters){
   B0 <- parameters$B0
   
   sd_r = 0
-  sim = 9 # https://academic.oup.com/icesjms/article/78/4/1311/6161236 と https://academic.oup.com/icesjms/article/77/5/1914/5856265
+  sim = 9 # https://academic.oup.com/icesjms/article/78/4/1311/6161236 and https://academic.oup.com/icesjms/article/77/5/1914/5856265
   set.seed(4);epsiron_r <- rnorm(100*sim,0,sd_r) %>% matrix(100,sim,byrow = TRUE)
   
   ## pollack (Pollachius pollachius; pol-nsea) data from https://github.com/shfischer/wklifeVII/blob/paper/R/input/lhist_extended.csv
@@ -31,8 +31,8 @@ Fig1_func <- function(parameters){
                        start, # 1.5 or 1 or 0.5
                        end # 1.5 or 1 or 0.5
   ){
-    F_2_Bmsy_times <- function(Bmsy_times){ # 1.5Bmsy、Bmsy、0.5Bmsyを与えるFを計算する関数(deterministic)
-      ny <- 100 #平衡状態までの年数
+    F_2_Bmsy_times <- function(Bmsy_times){ # function for F to calculate 1.5Bmsy、Bmsy、0.5Bmsy
+      ny <- 100 # year for management to converge in equivalent
       naa_F <- ssb_F <- matrix(0,na,ny)
       SBt_F <- rep(0,ny) # sum of the weight of spawning stock biomass
       
@@ -62,16 +62,14 @@ Fig1_func <- function(parameters){
     }
     ver_stk <- F_2_Bmsy_times(1)[[2]][,100]
     
-    # 年数と初期資源量はシナリオによって違うので注意
-    # various stock biomass and catch trajectories simulation
-    ### according to the value of k, select the management tool
+    # biomass at start of the data-collective period is different for scenarios
     naa <- caa <- wcaa <- faa <- baa <- ssb <- array(0,dim = c(na,100,sim))
     SBt <- Catch <- matrix(0,100,sim)
     
-    # custom=NULL: パラメータはデフォルト
+    # custom=NULL: default parameter
     if(scenario_organization == "ICES"){
-      ny_0.5Fmsy <- 75 # year for management to converge in equivalent
-      ny_history <- 25 # year for management to converge in equivalent
+      ny_0.5Fmsy <- 75 # constatnt fishing mortality period
+      ny_history <- 25 # data-collective period
       ny_before <- ny_0.5Fmsy+ny_history # years before management
       F_initial <- rep(0.5*Fmsy,75)
       if(scenario == "one_way"){
