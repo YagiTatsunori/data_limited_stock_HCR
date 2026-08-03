@@ -3,7 +3,7 @@ Fig3_func <- function(MSE_output,parameters){
   Fmsy <- parameters$Fmsy2F@.Data[1];MSY <- parameters$MSY@.Data[1];SBmsy <- parameters$SBmsy@.Data[1]
   saa <- parameters$saa
   
-  index_bind_WCAA_SSB <- function(sim_result,index,RP_name,index_name,scenario_name){ # 年齢ごとのデータを取るタイプ
+  index_bind_WCAA_SSB <- function(sim_result,index,RP_name,index_name,scenario_name){ # function for SSB and Catch
     (sim_result[[index]] %>% apply(2:3,sum) %>%
        apply(1, function(x) quantile(x,prob = c(0.05,0.5,0.95)))/RP_name) %>%
       t %>% as_tibble() %>%
@@ -17,7 +17,7 @@ Fig3_func <- function(MSE_output,parameters){
              index = index_name,
              scenario = scenario_name)
   }
-  index_bind_FAA <- function(sim_result,index_name,scenario_name){ # 漁獲係数用
+  index_bind_FAA <- function(sim_result,index_name,scenario_name){ # function for fishing mortality
     ((sim_result[[3]]/saa) %>% apply(2:3,median) %>%
        apply(1, function(x) quantile(x,prob = c(0.05,0.5,0.95)))/Fmsy) %>%
       t %>% as_tibble() %>%
