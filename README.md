@@ -1,25 +1,152 @@
-Data-limited資源（２系資源）用の新しいHCRの開発用レポジトリ
+# Contrasting performance of institutionally distinct empirical harvest control rules under identical operating models
 
-## functions.R
-stock_parameters()でインプットデータから、年齢ごとの体長などの必要なパラメータを計算
-reference_points()で、管理基準値を計算
-MSE_result()で、管理前の資源動態と、HCRによる管理を実行
-performance_MSE()で、MSEの結果のパフォーマンス計算を実行
+This repository contains R code and data for the publication:
 
-  
-MSE_result(scenario_organization = "ICES" or "Japan", # 管理前のシナリオは、ICESか日本か設定
-           scenario = "one-way" or "roller-coaster" or "random", # ICESを選んだ場合、どのシナリオを選ぶか設定
-           start = 0.75 or 0.5 or 0.25, # 日本を選んだ場合、初年度の資源量がB0の何倍かを設定
-           end = 0.75 or 0.5 or 0.25, # 日本を選んだ場合、最終年の資源量がB0の何倍かを設定
-           sd_r = 0.6, # 再生産誤差
-           sd_i = 0.2, # 資源量指標値の観測誤差
-           sd_l = 0.1, # 毎年の体長の平均値の誤差
-           sim = 1000) # シミュレーションの回数
+> Yagi and Ichinokawa (2026)
 
-## bio_param.R
-von Bertalanffyの成長式でのkの値によってICESのHCRはパラメータを調節する
-なのでさまざまなkの値を持つ、以下の資源のパラメータを設定する
-pollack (Pollachius pollachius; k = 0.19)
-Thornback ray (Raja clavata; k = 0.09)
-Brill (Scophthalmus rhombus; k = 0.38)
-Plaice (Pleuronectes platessa; k = 0.23)
+*Contrasting performance of institutionally distinct empirical harvest control rules under identical operating models*
+
+## Overview
+
+The R codes implement simulations for:
+
+- age-structured management strategy evaluation (MSE) simulations;
+- implementation of five empirical harvest control rules (HCRs);
+- genetic-algorithm-based parameter optimization;
+- sensitivity analyses;
+- generation of figures and tables presented in the manuscript.
+
+------------------------------------------------------------------------
+
+## Requirements
+
+The analyses were conducted in R version 4.4.2 (2024-10-31).
+
+Required packages include:
+
+``` r
+GA
+tidyverse
+ggplot2
+doParallel
+FLCore
+FLBRP
+frasyr23
+remotes
+cat3advice
+lemon
+patchwork
+ggh4x
+```
+
+------------------------------------------------------------------------
+
+## Main scripts
+
+### `default_simulations.R`
+
+Runs the main simulations for four stocks:
+
+- Pollack (*Pollachius pollachius*; k = 0.19)
+- Thornback ray (*Raja clavata*; k = 0.09)
+- European plaice (*Pleuronectes platessa*; k = 0.23)
+- Anchovy (*Engraulis encrasicolus*; k = 0.44)
+
+Five HCRs are evaluated:
+
+1.  rfb rule
+2.  type-2 rule
+3.  chr rule
+4.  rfb rule with $\bar{C}$
+5.  type-2 rule with $f$
+
+The simulations consist of:
+
+- a 100-year historical period;
+- a 30-year management period.
+
+Outputs are used to produce figures 1–8 and S1-S8.
+
+------------------------------------------------------------------------
+
+### `functions.R`
+
+Contains functions used throughout the analyses, including:
+
+- operating model calculations;
+- HCR implementations;
+- performance indicator calculations;
+- utility functions.
+
+------------------------------------------------------------------------
+
+### `all_ga_do.R`
+
+Performs parameter optimization using a genetic algorithm (GA) for 4 stocks and 5 HCRs.
+
+Optimization is conducted for:
+
+- 11 fishing-histories for 4 stocks;
+
+Outputs include optimal and semi-optimal parameter sets used in the manuscript.
+
+------------------------------------------------------------------------
+
+## Figure scripts
+
+### `Fig1.R` – `Fig8.R`
+
+Scripts used to generate Figures 1–8 in the manuscript.
+
+Each script corresponds to a single figure (e.g., `Fig1.R` generates Figure 1).
+
+------------------------------------------------------------------------
+
+## Data files
+
+### `brps_new.rds`
+
+Reference-point data (`Fcrash`) used in this study.
+
+This file was adapted from the GitHub repository accompanying:
+
+> Fischer et al., *An exploration of the ICES approach for categories 4–6*
+
+<https://github.com/shfischer/GA_MSE_cat456>
+
+------------------------------------------------------------------------
+
+### `stocks.csv`
+
+Biological parameters for the study species.
+
+This file was adapted from the GitHub repository accompanying:
+
+> Fischer et al. (2020)
+
+<https://github.com/shfischer/GA_MSE>
+
+------------------------------------------------------------------------
+
+## Sensitivity analyses
+
+The folder:
+
+``` text
+sensitivity_analysis/
+```
+
+contains scripts used for all sensitivity analyses reported in the manuscript.
+implementing sensitivity analyses by varying steepness to 0.6 and 0.9, process error to 0.3 and 0.9, and observation error to 0.4 and 0.6
+
+------------------------------------------------------------------------
+
+## Reproducing the analyses
+
+A recommended execution order is:
+
+1.  `default_simulations.R`
+2.  `all_ga_do.R`
+3.  scripts in `sensitivity_analysis/`
+
+------------------------------------------------------------------------
